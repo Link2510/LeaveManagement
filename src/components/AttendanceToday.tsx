@@ -19,6 +19,7 @@ interface AttendanceTodayProps {
   loading: boolean;
 }
 
+
 export function AttendanceToday({
   employees,
   holidays,
@@ -27,6 +28,13 @@ export function AttendanceToday({
   isManagerView,
   loading,
 }: AttendanceTodayProps) {
+
+  console.log('[ATTENDANCE TRACE]', {
+  loading,
+  employeesCount: employees.length,
+  isManagerView,
+});
+
   const [searchTerm, setSearchTerm] = useState('');
   const [deptFilter, setDeptFilter] = useState<'ALL' | Department>('ALL');
   const [globalWobblePulse, setGlobalWobblePulse] = useState(0);
@@ -59,6 +67,7 @@ export function AttendanceToday({
     }
     return set;
   }, [dailyOffEmployeeIds, isManagerView, managerRequests, todayKey]);
+  
 
   const workingEmployees = useMemo(() => {
     if (!todayWorking) return [];
