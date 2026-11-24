@@ -1,11 +1,11 @@
 {
-  "projectId": "integrated-voyager-lbpf3",
-  "appId": "1:1020666732814:web:1da3439cac04f3dfe3b75f",
-  "apiKey": "AIzaSyBuXo1LR02pj5T1mqD_nW-Op5T3HY4bzJg",
+  "projectId": "leave-management-vn",
+  "appId": "1:473979395201:web:8443e0a4e66060d52d0180",
+  "apiKey": "AIzaSyD2tJkh0Zf6iLZlYO4bA3o1amCvdPj8tts",
   "authDomain": "integrated-voyager-lbpf3.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-271bda3f-07de-4fc5-8358-7f09330d0009",
   "storageBucket": "integrated-voyager-lbpf3.firebasestorage.app",
-  "messagingSenderId": "1020666732814",
+  "messagingSenderId": "473979395201",
   "measurementId": "",
   "oAuthClientId": "1020666732814-c3o609cbicbq0vtbu6qi964fmp6hmota.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
