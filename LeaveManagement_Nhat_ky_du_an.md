@@ -1,7 +1,7 @@
 # LeaveManagement – Nhật ký cập nhật và cải tiến dự án
 
 **Cập nhật lần cuối:** 24/11/2026  
-**Kiến trúc hiện tại:** React + TypeScript + Vite + Tailwind CSS + Express (`server.ts`, cổng `3000`) + Firebase (Google Auth & Cloud Firestore)
+**Kiến trúc hiện tại:** React + TypeScript + Vite + Tailwind CSS + Firebase (Google Auth, Cloud Firestore & Firebase Hosting — chạy hoàn toàn phía client, không cần server Node.js)
 
 > Tài liệu này ghi lại toàn bộ các hạng mục đã xây dựng, nâng cấp và kiểm thử từ nền tảng ban đầu của dự án **LeaveManagement** cho tới phiên bản hiện tại.
 
@@ -14,10 +14,9 @@
 | Giao diện | React 19, TypeScript, Tailwind CSS v4 |
 | Hiệu ứng chuyển động | `motion` (`motion/react`) |
 | Biểu tượng | `lucide-react` |
-| Backend nhẹ / API | Express (`server.ts`, tích hợp Vite middleware ở môi trường dev) |
+| Triển khai web tĩnh | Vite SPA (`dist/`) + Firebase Hosting (`mvtpdayoff.web.app`, cấu hình tại `firebase.json`) |
 | Cơ sở dữ liệu | Firebase Cloud Firestore (cấu hình tại `firebase-applet-config.json`) |
-| Xác thực | Tên đăng nhập & mật khẩu cho Quản lý (`scrypt` + HMAC Bearer trong bộ nhớ), kết hợp liên kết Firebase Firestore một lần trên trình duyệt |
-| Gửi email | Resend REST API qua `/api/notify-email` (tùy chọn `RESEND_API_KEY`), dự phòng thông báo nội bộ + `mailto:` |
+| Xác thực | Firebase Authentication (Google Sign-In `signInWithPopup`) kiểm tra quyền Quản lý qua `ADMIN_EMAIL` & `/managers/{email}` |
 | Kiểm tra & Build | `npm run lint` (`tsc --noEmit`), `npm run build` (`vite build`), `npx eslint firestore.rules` |
 
 ---
@@ -89,12 +88,11 @@
   - Kiểm tra định dạng và tên miền hợp lệ cả ở client (`src/utils/urlUtils.ts`) lẫn trong `firestore.rules` (chỉ chấp nhận HTTPS thuộc `drive.google.com` hoặc `docs.google.com`, độ dài tối đa 500 ký tự).
   - Quản lý bấm mở trực tiếp liên kết Google Drive trong màn hình duyệt đơn (`AdminLeaveQueue.tsx`) hoặc qua email thông báo; nhân viên cũng xem lại được liên kết đã đính kèm trong mục **Kiểm tra đơn của tôi** (`EmployeeLeaveLookup.tsx`).
 
-### 2.11 Bảo mật Quản lý bằng Tên đăng nhập & Mật khẩu
-- **Xác thực Quản lý phía server (`server.ts`, `src/services/managerAuthService.ts`, `src/components/ManagerAuthModal.tsx`):**
-  - Nhấn **Đăng nhập Quản lý** mở hộp thoại nhập **Tên đăng nhập** và **Mật khẩu** (hỗ trợ thiết lập tài khoản Quản lý lần đầu nếu chưa cấu hình biến môi trường `MANAGER_USERNAME` / `MANAGER_PASSWORD` và hỗ trợ **Đổi mật khẩu Quản lý** ngay trong thanh điều hướng).
-  - Mật khẩu được băm bằng `crypto.scryptSync` kèm salt ngẫu nhiên và kiểm tra bằng `timingSafeEqual`; token phiên (HMAC-SHA256, thời hạn 12 giờ) chỉ giữ trong bộ nhớ JavaScript/React (không lưu `localStorage`/`sessionStorage`), cùng cơ chế giới hạn số lần thử đăng nhập theo IP.
-  - Để giữ nguyên lớp bảo vệ dữ liệu Firestore (`firestore.rules`), trình duyệt của Quản lý chỉ cần bấm **Kết nối Firebase Firestore** 1 lần; các lần đăng nhập tiếp theo chỉ cần nhập **Tên đăng nhập & Mật khẩu**.
-  - Endpoint `/api/notify-email` hỗ trợ xác thực bằng cả Bearer token của phiên Quản lý mới lẫn Firebase ID Token.
+### 2.11 Đăng nhập Quản lý trực tiếp bằng Firebase Authentication (loại bỏ `server.ts`)
+- **Chạy 100% trên Firebase (`src/App.tsx`, `src/firebase.ts`, `firebase.json`):**
+  - Loại bỏ hoàn toàn backend Node.js/Express (`server.ts`) và hộp thoại mật khẩu cục bộ để triển khai gọn nhẹ lên **Firebase Hosting** miễn phí (`mvtpdayoff.web.app`).
+  - Nhấn **Đăng nhập Quản lý** gọi trực tiếp `signInWithPopup(auth, googleProvider)` của Firebase Authentication; chỉ những tài khoản Google đã xác minh email thuộc `ADMIN_EMAIL` hoặc nằm trong collection `/managers/{email}` mới mở được không gian Quản lý và đọc/ghi dữ liệu nhạy cảm theo `firestore.rules`.
+  - Nếu đăng nhập bằng tài khoản Google chưa được cấp quyền Quản lý, giao diện hiển thị cảnh báo rõ ràng và cho phép **Đổi tài khoản Quản lý** hoặc **Đăng xuất**.
 
 ### 2.12 Tab "Hôm nay ai đi làm" với Avatar đầu lúc lắc
 - **Mục mới trong thanh điều hướng (`src/components/AttendanceToday.tsx`, `src/components/BobbleAvatar.tsx`):**
@@ -142,22 +140,19 @@
 | `src/firebase.ts` | Khởi tạo Firebase App, Auth (Google), Firestore và xử lý lỗi chuẩn hóa |
 | `src/types/leave.ts` | Định nghĩa kiểu dữ liệu nhân viên, hạn mức phép, đơn nghỉ, tra cứu email, ngày nghỉ công ty |
 | `src/services/firestoreService.ts` | Toàn bộ thao tác đọc/ghi realtime và batch Firestore |
-| `src/services/emailService.ts` | Gọi API gửi email `/api/notify-email` kèm Firebase ID Token và tạo link `mailto:` |
-| `src/utils/dateUtils.ts` | Tính ngày làm việc (Thứ 2–6, loại trừ lễ, cộng ngày làm bù), tạo ô lịch tháng, định dạng ngày/thứ VN |
+| `src/utils/dateUtils.ts` | Tính ngày làm việc (Thứ 2–6, loại trừ lễ, cộng ngày OT), tạo ô lịch tháng, định dạng ngày/thứ VN |
 | `src/utils/hashUtils.ts` | Hàm băm `sha256Email` phục vụ tra cứu đơn cá nhân an toàn |
 | `src/utils/urlUtils.ts` | Kiểm tra và làm sạch liên kết Google Drive hợp lệ (`drive.google.com`, `docs.google.com`) |
 | `src/components/LeaveRequestForm.tsx` | Biểu mẫu dành riêng cho Quản lý đăng ký, chia phân bổ nhiều loại phép, kiểm tra quỹ phép còn lại & trừ phép ngay |
 | `src/components/VietnameseDatePicker.tsx` | Bộ chọn ngày tiếng Việt tùy chỉnh với tiêu đề Thứ 2 – Chủ nhật |
-| `src/components/HolidayManager.tsx` | Lịch trực quan & quản lý ngày nghỉ lễ, nghỉ bù, làm việc bù theo năm |
+| `src/components/HolidayManager.tsx` | Lịch trực quan & quản lý ngày nghỉ lễ, nghỉ bù, OT theo năm |
 | `src/components/MonthlyCalendar.tsx` | Lịch nghỉ toàn công ty theo tháng dành cho Quản lý |
 | `src/components/LeaveStatsTable.tsx` | Bảng thống kê phép nhân viên (phân trang 5 người/trang, lọc năm/phòng ban) |
 | `src/components/EmployeeManager.tsx` | Quản lý danh sách nhân viên, avatar, hạn mức phép và tài khoản Quản lý |
 | `src/components/ApprovalHistory.tsx` | Lịch sử đăng ký, phân bổ nghỉ phép & xác nhận nộp bổ sung giấy nghỉ ốm |
 | `src/components/AttendanceToday.tsx` | Tab Hôm nay ai đi làm (lọc phòng ban, tìm tên, trạng thái làm việc trong ngày) |
 | `src/components/BobbleAvatar.tsx` | 12 mẫu avatar nhân vật SVG với phần đầu lúc lắc tương tác |
-| `src/components/ManagerAuthModal.tsx` | Hộp thoại đăng nhập, thiết lập lần đầu và đổi mật khẩu cho Quản lý |
-| `src/services/managerAuthService.ts` | Lưu trữ token phiên Quản lý trong bộ nhớ và gọi API xác thực Quản lý |
-| `server.ts` | Express server phục vụ Vite/SPA, xác thực Quản lý (`/api/manager/*`) và gửi email `/api/notify-email` |
+| `firebase.json` | Cấu hình Firebase Hosting (`mvtpdayoff.web.app`) và đường dẫn `firestore.rules` |
 | `firestore.rules` & `firebase-blueprint.json` | Quy tắc bảo mật Firestore và schema dữ liệu đồng bộ |
 
 ---
@@ -166,5 +161,4 @@
 
 - `npx eslint firestore.rules`: Đạt (0 lỗi) và đã deploy rules lên Firebase.
 - `npm run lint` (`tsc --noEmit`): Đạt (0 lỗi TypeScript).
-- `npm run build` (`vite build`): Đạt (build thành công).
-- Lưu ý vận hành email tự động: Để gửi email trực tiếp không cần mở ứng dụng Mail, cần khai báo `RESEND_API_KEY` (và tùy chọn `EMAIL_FROM`, `ADMIN_NOTIFICATION_EMAIL`) trong biến môi trường server.
+- `npm run build` (`vite build`): Đạt (build thành công, sẵn sàng deploy Firebase Hosting).

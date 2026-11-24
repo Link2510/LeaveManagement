@@ -6,7 +6,6 @@ import {
   CalendarOff,
   FilePlus2,
   History,
-  KeyRound,
   LayoutDashboard,
   LogIn,
   LogOut,
@@ -31,11 +30,6 @@ import {
   syncMissingEmailLookups,
 } from './services/firestoreService';
 import {
-  clearActiveManagerSession,
-  getActiveManagerSession,
-  type ManagerSession,
-} from './services/managerAuthService';
-import {
   FIXED_PERSONAL_LEAVE_DAYS,
   type CompanyHoliday,
   type Employee,
@@ -53,7 +47,6 @@ import { EmployeeManager } from './components/EmployeeManager';
 import { HolidayManager } from './components/HolidayManager';
 import { ApprovalHistory } from './components/ApprovalHistory';
 import { AttendanceToday } from './components/AttendanceToday';
-import { ManagerAuthModal } from './components/ManagerAuthModal';
 
 type NavTab =
   | 'attendance'
@@ -69,10 +62,6 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [isAuthorizedManager, setIsAuthorizedManager] = useState(false);
   const [managerCheckDone, setManagerCheckDone] = useState(false);
-  const [managerSession, setManagerSession] = useState<ManagerSession | null>(() =>
-    getActiveManagerSession(),
-  );
-  const [authModalMode, setAuthModalMode] = useState<'login' | 'change-password' | null>(null);
   const [authError, setAuthError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
 
@@ -95,9 +84,9 @@ export default function App() {
       user.emailVerified &&
       user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
   );
-  const hasManagerGate = Boolean(managerSession);
-  const isManagerView = hasManagerGate && isAuthorizedManager && !previewAsEmployee;
-  const showManagerWorkspace = hasManagerGate && !previewAsEmployee;
+  const isManagerSignedIn = Boolean(user && isAuthorizedManager);
+  const isManagerView = isManagerSignedIn && !previewAsEmployee;
+  const showManagerWorkspace = isManagerSignedIn && !previewAsEmployee;
   const prevManagerWorkspaceRef = useRef<boolean>(false);
   const lastDailyOffSyncRef = useRef<string>('');
 
@@ -137,7 +126,7 @@ export default function App() {
 
     let active = true;
     setDataLoading(true);
-    const canReadManagerFirestore = hasManagerGate && isAuthorizedManager;
+    const canReadManagerFirestore = isManagerSignedIn;
 
     const init = async () => {
       if (canReadManagerFirestore && user) {
@@ -188,21 +177,20 @@ export default function App() {
       unsubManagers();
       unsubQuotas?.();
     };
-  }, [authReady, managerCheckDone, user, hasManagerGate, isAuthorizedManager]);
+  }, [authReady, managerCheckDone, user, isManagerSignedIn]);
 
   useEffect(() => {
     if (
-      hasManagerGate &&
-      isAuthorizedManager &&
+      isManagerSignedIn &&
       requests.length > 0 &&
       Object.keys(contacts).length > 0
     ) {
       void syncMissingEmailLookups(requests, contacts);
     }
-  }, [hasManagerGate, isAuthorizedManager, requests, contacts]);
+  }, [isManagerSignedIn, requests, contacts]);
 
   useEffect(() => {
-    if (!hasManagerGate || !isAuthorizedManager || dataLoading) return;
+    if (!isManagerSignedIn || dataLoading) return;
     const todayKey = getTodayKey();
     const reqSig = requests
       .filter((r) => r.status === 'Đã duyệt')
@@ -219,7 +207,7 @@ export default function App() {
       lastDailyOffSyncRef.current = signature;
       void syncAllDailyOffStatuses(requests, holidays);
     }
-  }, [hasManagerGate, isAuthorizedManager, dataLoading, requests, holidays]);
+  }, [isManagerSignedIn, dataLoading, requests, holidays]);
 
   useEffect(() => {
     const wasManager = prevManagerWorkspaceRef.current;
@@ -329,31 +317,38 @@ export default function App() {
     };
   }, [employees, requests, holidays]);
 
-  const handleConnectFirestoreGoogle = async () => {
+  const handleManagerSignIn = async () => {
     setSigningIn(true);
     setAuthError('');
     try {
       await signInWithPopup(auth, googleProvider);
+      setPreviewAsEmployee(false);
     } catch (err) {
-      setAuthError(
-        err instanceof Error
-          ? err.message
-          : 'Không thể liên kết tài khoản Google Firestore. Vui lòng thử lại.',
-      );
+      const code =
+        typeof err === 'object' && err !== null && 'code' in err
+          ? String((err as { code?: unknown }).code)
+          : '';
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        setAuthError('');
+      } else if (code === 'auth/unauthorized-domain') {
+        setAuthError(
+          'Tên miền hiện tại chưa được thêm vào Authorized domains trong Firebase Authentication.',
+        );
+      } else {
+        setAuthError(
+          err instanceof Error
+            ? err.message
+            : 'Không thể đăng nhập Quản lý qua Firebase. Vui lòng thử lại.',
+        );
+      }
     } finally {
       setSigningIn(false);
     }
   };
 
-  const handleSignOut = () => {
-    clearActiveManagerSession();
-    setManagerSession(null);
+  const handleSignOut = async () => {
+    setAuthError('');
     setPreviewAsEmployee(false);
-    setAuthError('');
-  };
-
-  const handleUnlinkFirestoreGoogle = async () => {
-    setAuthError('');
     if (user) {
       await signOut(auth).catch(() => {});
     }
@@ -473,13 +468,13 @@ export default function App() {
       </nav>
 
       <div className="p-4 border-t border-white/15 space-y-3 shrink-0">
-        {authError && hasManagerGate && (
+        {authError && (
           <div className="p-2.5 rounded-lg bg-amber-950/60 border border-amber-300/40 text-[11px] text-amber-100 leading-relaxed">
             {authError}
           </div>
         )}
 
-        {hasManagerGate && managerSession ? (
+        {isManagerSignedIn ? (
           <>
             <div className="p-2.5 rounded-lg bg-[#1c4454] border border-white/15 space-y-2">
               <div className="flex items-center gap-1.5 text-xs font-medium text-white/90">
@@ -529,43 +524,20 @@ export default function App() {
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <div className="text-xs font-semibold text-white truncate">
-                  Quản lý ({managerSession.username})
+                  {user?.displayName || 'Quản lý'}
                 </div>
-                <div className="text-[11px] text-white/75 truncate flex items-center gap-1.5">
-                  <span className="truncate">
-                    {isAuthorizedManager ? user?.email : 'Chưa liên kết dữ liệu Firestore'}
-                  </span>
-                  {isAuthorizedManager && (
-                    <button
-                      type="button"
-                      onClick={() => void handleUnlinkFirestoreGoogle()}
-                      className="text-sky-200 hover:underline shrink-0"
-                    >
-                      Đổi
-                    </button>
-                  )}
+                <div className="text-[11px] text-white/75 truncate">
+                  {user?.email}
                 </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                {managerSession.source === 'file' && (
-                  <button
-                    type="button"
-                    onClick={() => setAuthModalMode('change-password')}
-                    title="Đổi mật khẩu Quản lý"
-                    className="p-2 text-white/75 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                  >
-                    <KeyRound className="w-4 h-4" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  title="Đăng xuất Quản lý"
-                  className="p-2 text-white/75 hover:text-red-200 hover:bg-red-500/20 rounded-lg transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => void handleSignOut()}
+                title="Đăng xuất Quản lý"
+                className="p-2 text-white/75 hover:text-red-200 hover:bg-red-500/20 rounded-lg transition-colors shrink-0"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
           </>
         ) : (
@@ -579,12 +551,28 @@ export default function App() {
 
             <button
               type="button"
-              onClick={() => setAuthModalMode('login')}
-              className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-[#25576b] bg-white hover:bg-sky-50 rounded-lg transition-colors whitespace-nowrap shadow-xs"
+              disabled={signingIn}
+              onClick={() => void handleManagerSignIn()}
+              className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-[#25576b] bg-white hover:bg-sky-50 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap shadow-xs"
             >
               <LogIn className="w-3.5 h-3.5" />
-              Đăng nhập Quản lý
+              {signingIn
+                ? 'Đang đăng nhập...'
+                : user && managerCheckDone
+                  ? 'Đổi tài khoản Quản lý'
+                  : 'Đăng nhập Quản lý'}
             </button>
+
+            {user && managerCheckDone && (
+              <button
+                type="button"
+                onClick={() => void handleSignOut()}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Đăng xuất ({user.email})
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -677,46 +665,20 @@ export default function App() {
           </header>
 
           <main className="flex-1 p-6 max-w-7xl w-full mx-auto space-y-6">
-            {!dataLoading && employees.length === 0 && !hasManagerGate && (
+            {!dataLoading && employees.length === 0 && !isManagerSignedIn && (
               <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-900 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <span>
                   Hệ thống chưa có danh sách nhân viên. Quản lý cần đăng nhập một lần để khởi tạo dữ liệu nhân sự ban đầu.
                 </span>
                 <button
                   type="button"
-                  onClick={() => setAuthModalMode('login')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-lg whitespace-nowrap shrink-0"
+                  disabled={signingIn}
+                  onClick={() => void handleManagerSignIn()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-60 rounded-lg whitespace-nowrap shrink-0"
                 >
                   <LogIn className="w-3.5 h-3.5" />
-                  Đăng nhập Quản lý
+                  {signingIn ? 'Đang đăng nhập...' : 'Đăng nhập Quản lý'}
                 </button>
-              </div>
-            )}
-
-            {showManagerWorkspace && !isAuthorizedManager && (
-              <div className="bg-white border border-amber-200 rounded-xl p-6 space-y-3">
-                <div className="flex items-start gap-3">
-                  <ShieldCheck className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <h2 className="text-sm font-semibold text-slate-900">
-                      Liên kết dữ liệu Firebase trên trình duyệt này
-                    </h2>
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      Bạn đã mở khóa cổng Quản lý bằng tên đăng nhập và mật khẩu. Để bảo vệ dữ liệu Firestore không bị truy cập trái phép từ bên ngoài, vui lòng bấm kết nối tài khoản Google Quản lý một lần trên trình duyệt này.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-3 pl-8">
-                  <button
-                    type="button"
-                    disabled={signingIn}
-                    onClick={handleConnectFirestoreGoogle}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg transition-colors"
-                  >
-                    <ShieldCheck className="w-4 h-4" />
-                    {signingIn ? 'Đang kết nối...' : 'Kết nối Firebase Firestore'}
-                  </button>
-                </div>
               </div>
             )}
 
@@ -791,7 +753,7 @@ export default function App() {
               employeeStats={employeeStats}
               holidays={holidays}
               currentUserUid={user.uid}
-              adminLabel={managerSession?.username || user.displayName || 'Quản lý'}
+              adminLabel={user.displayName || user.email || 'Quản lý'}
               onNavigateDashboard={() => setActiveTab('dashboard')}
               onNavigateCalendar={() => setActiveTab('calendar')}
             />
@@ -810,7 +772,7 @@ export default function App() {
             <ApprovalHistory
               requests={requests}
               contacts={contacts}
-              adminLabel={managerSession?.username || user?.displayName || 'Quản lý'}
+              adminLabel={user?.displayName || user?.email || 'Quản lý'}
             />
           )}
 
@@ -826,19 +788,6 @@ export default function App() {
             </AnimatePresence>
           </main>
         </div>
-
-        <ManagerAuthModal
-          open={authModalMode !== null}
-          mode={authModalMode || 'login'}
-          onClose={() => setAuthModalMode(null)}
-          onSuccess={(session) => {
-            setManagerSession(session);
-            setPreviewAsEmployee(false);
-            if (authModalMode === 'login') {
-              setActiveTab('dashboard');
-            }
-          }}
-        />
       </div>
     </MotionConfig>
   );
