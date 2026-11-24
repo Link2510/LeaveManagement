@@ -241,19 +241,31 @@ export async function removeManagerAccount(uid: string): Promise<void> {
   }
 }
 
-
-export async function seedInitialDataIfNeeded(isManager: boolean, managerUid: string): Promise<void> {
+export async function seedInitialDataIfNeeded(
+  isManager: boolean,
+  managerUid: string
+): Promise<void> {
   if (!isManager || !managerUid) return;
+
+  let stage = 'Bắt đầu';
 
   try {
     // 1. Seed Employees + Manager Quotas if employees collection is empty
+    stage = 'Đọc danh sách nhân viên';
+
     const empSnap = await getDocs(
-      query(collection(db, 'employees'), where('department', 'in', ['Quản lý', 'Nhân sự'])),
+      query(
+        collection(db, 'employees'),
+        where('department', 'in', ['Quản lý', 'Nhân sự'])
+      )
     );
+
     if (empSnap.empty) {
       const batch = writeBatch(db);
+
       for (const emp of INITIAL_EMPLOYEES) {
         const empRef = doc(db, 'employees', emp.id);
+
         batch.set(empRef, {
           name: emp.name,
           department: emp.department,
@@ -262,6 +274,7 @@ export async function seedInitialDataIfNeeded(isManager: boolean, managerUid: st
         });
 
         const quotaRef = doc(db, 'employeeQuotas', emp.id);
+
         batch.set(quotaRef, {
           employeeId: emp.id,
           annualLeaveInitial: emp.annualLeaveInitial,
@@ -269,17 +282,27 @@ export async function seedInitialDataIfNeeded(isManager: boolean, managerUid: st
           updatedAt: serverTimestamp(),
         });
       }
+
+      stage = 'Ghi nhân viên và hạn mức phép';
       await batch.commit();
     }
 
     // 2. Seed Company Holidays if empty
+    stage = 'Đọc ngày nghỉ công ty';
+
     const holSnap = await getDocs(
-      query(collection(db, 'companyHolidays'), where('year', '>=', 2020)),
+      query(
+        collection(db, 'companyHolidays'),
+        where('year', '>=', 2020)
+      )
     );
+
     if (holSnap.empty) {
       const batch = writeBatch(db);
+
       for (const hol of INITIAL_HOLIDAYS) {
         const holRef = doc(db, 'companyHolidays', hol.id);
+
         batch.set(holRef, {
           date: hol.date,
           title: hol.title,
@@ -290,74 +313,24 @@ export async function seedInitialDataIfNeeded(isManager: boolean, managerUid: st
           updatedAt: serverTimestamp(),
         });
       }
+
+      stage = 'Ghi ngày nghỉ công ty';
       await batch.commit();
     }
 
-    // 3. Seed Initial Leave Requests if empty
-    const reqSnap = await getDocs(collection(db, 'leaveRequests'));
-    if (reqSnap.empty) {
-      const adminEmailHash = await sha256Email(ADMIN_EMAIL);
-      const batch = writeBatch(db);
-      for (const req of INITIAL_REQUESTS) {
-        const reqRef = doc(db, 'leaveRequests', req.id);
-        const payload: Record<string, unknown> = {
-          employeeId: req.employeeId,
-          employeeName: req.employeeName,
-          department: req.department,
-          startDate: req.startDate,
-          endDate: req.endDate,
-          workingDays: req.workingDays,
-          reason: req.reason,
-          note: req.note,
-          status: req.status,
-          allocations: req.allocations,
-          hasHospitalCert: req.hasHospitalCert,
-          attachmentName: req.attachmentName,
-          emailHash: adminEmailHash,
-          submitterUid: managerUid,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        };
-        if (req.rejectionReason) payload.rejectionReason = req.rejectionReason;
-        if (req.processedBy) payload.processedBy = req.processedBy;
-        if (req.processedAt) payload.processedAt = req.processedAt;
-        batch.set(reqRef, payload);
+    // Không tạo đơn nghỉ phép mẫu.
+    // Đơn nghỉ phép sẽ được tạo bởi người dùng trên ứng dụng.
 
-        const contactRef = doc(db, 'leaveRequestContacts', req.id);
-        batch.set(contactRef, {
-          requestId: req.id,
-          email: ADMIN_EMAIL,
-          submitterUid: managerUid,
-          createdAt: serverTimestamp(),
-        });
-
-        const lookupRef = doc(db, 'emailLookups', adminEmailHash, 'requests', req.id);
-        const lookupPayload: Record<string, unknown> = {
-          requestId: req.id,
-          emailHash: adminEmailHash,
-          employeeId: req.employeeId,
-          employeeName: req.employeeName,
-          department: req.department,
-          startDate: req.startDate,
-          endDate: req.endDate,
-          workingDays: req.workingDays,
-          reason: req.reason,
-          status: req.status,
-          allocations: req.allocations,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        };
-        if (req.rejectionReason) lookupPayload.rejectionReason = req.rejectionReason;
-        if (req.processedBy) lookupPayload.processedBy = req.processedBy;
-        if (req.processedAt) lookupPayload.processedAt = req.processedAt;
-        batch.set(lookupRef, lookupPayload);
-      }
-      await batch.commit();
-    }
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, 'seedInitialDataIfNeeded');
+    console.error('[SEED DEBUG] Thất bại tại:', stage, error);
+    handleFirestoreError(
+      error,
+      OperationType.WRITE,
+      'seedInitialDataIfNeeded'
+    );
   }
 }
+
 
 export function subscribeEmployees(onData: (employees: Employee[]) => void): Unsubscribe {
   const path = 'employees';

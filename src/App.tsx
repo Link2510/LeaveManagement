@@ -146,14 +146,18 @@ export default function App() {
     const canReadManagerFirestore = isManagerSignedIn;
 
     const init = async () => {
-      if (canReadManagerFirestore && user) {
-        await seedInitialDataIfNeeded(true, user.uid);
-      }
-      if (active) {
-        setDataLoading(false);
-      }
-    };
-    void init();
+  try {
+    if (canReadManagerFirestore && user) {
+      await seedInitialDataIfNeeded(true, user.uid);
+    }
+  } catch (error) {
+    console.error('Không thể khởi tạo dữ liệu ban đầu:', error);
+  } finally {
+    if (active) {
+      setDataLoading(false);
+    }
+  }
+}; void init();
 
     const todayKey = getTodayKey();
     const unsubEmployees = subscribeEmployees((list) => {
