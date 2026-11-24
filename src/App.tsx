@@ -87,6 +87,7 @@ export default function App() {
   const [dailyOffEmployeeIds, setDailyOffEmployeeIds] = useState<string[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
+
   const isSuperAdmin = Boolean(
     user &&
     user.emailVerified &&
@@ -97,6 +98,22 @@ export default function App() {
   const showManagerWorkspace = isManagerSignedIn && !previewAsEmployee;
   const prevManagerWorkspaceRef = useRef<boolean>(false);
   const lastDailyOffSyncRef = useRef<string>('');
+
+useEffect(() => {
+  console.log('[LOADING TRACE]', {
+    dataLoading,
+    employeesCount: employees.length,
+    authReady,
+    managerCheckDone,
+    isManagerSignedIn,
+  });
+}, [
+  dataLoading,
+  employees.length,
+  authReady,
+  managerCheckDone,
+  isManagerSignedIn,
+]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (nextUser) => {

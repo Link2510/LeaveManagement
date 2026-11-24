@@ -252,13 +252,14 @@ export async function seedInitialDataIfNeeded(
   try {
     // 1. Seed Employees + Manager Quotas if employees collection is empty
     stage = 'Đọc danh sách nhân viên';
-
+    console.log('[SEED TRACE] Bắt đầu đọc nhân viên');
     const empSnap = await getDocs(
       query(
         collection(db, 'employees'),
         where('department', 'in', ['Quản lý', 'Nhân sự'])
       )
     );
+    console.log('[SEED TRACE] Đọc nhân viên xong:', empSnap.size);
 
     if (empSnap.empty) {
       const batch = writeBatch(db);
@@ -289,13 +290,14 @@ export async function seedInitialDataIfNeeded(
 
     // 2. Seed Company Holidays if empty
     stage = 'Đọc ngày nghỉ công ty';
-
+    console.log('[SEED TRACE] Bắt đầu đọc ngày nghỉ');
     const holSnap = await getDocs(
       query(
         collection(db, 'companyHolidays'),
         where('year', '>=', 2020)
       )
     );
+    console.log('[SEED TRACE] Đọc ngày nghỉ xong:', holSnap.size);
 
     if (holSnap.empty) {
       const batch = writeBatch(db);
@@ -338,6 +340,7 @@ export function subscribeEmployees(onData: (employees: Employee[]) => void): Uns
   return onSnapshot(
     q,
     (snapshot) => {
+        console.log('[EMPLOYEE TRACE] Snapshot nhận được:', snapshot.size);
       const items: Employee[] = snapshot.docs.map((d) => {
         const data = d.data();
         return {
@@ -358,6 +361,7 @@ export function subscribeEmployees(onData: (employees: Employee[]) => void): Uns
       onData(items);
     },
     (error) => {
+      console.error('[EMPLOYEE TRACE] Lỗi listener:', error);
       handleFirestoreError(error, OperationType.LIST, path);
     },
   );
