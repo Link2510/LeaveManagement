@@ -1,0 +1,462 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidSha256Id(id) {
+      return id is string && id.size() == 64 && id.matches('^[a-f0-9]{64}$');
+    }
+
+    function isValidEmailId(id) {
+      return id is string && id.size() >= 3 && id.size() <= 160 && id.matches('^[a-z0-9._%+\\-]+@[a-z0-9.\\-]+\\.[a-z]{2,}$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isSuperAdmin() {
+      return isVerifiedUser() && request.auth.token.email.lower() == 'mynamelink1998@gmail.com';
+    }
+
+    function isManager() {
+      return isSuperAdmin()
+        || (isVerifiedUser() && exists(/databases/$(database)/documents/managers/$(request.auth.token.email.lower())));
+    }
+
+    function isValidDateString(val) {
+      return val is string && val.size() == 10 && val.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    function isValidMonthString(val) {
+      return val is string && val.size() == 7 && val.matches('^\\d{4}-\\d{2}$');
+    }
+
+    function isValidDriveUrl(val) {
+      return val is string
+        && val.size() <= 500
+        && (val == '' || val.matches('^https://(drive|docs)\\.google\\.com/[^\\s]+$'));
+    }
+
+    function isValidDepartment(dept) {
+      return dept is string && dept in ['Quản lý', 'Nhân sự'];
+    }
+
+    function isValidAvatarPhoto(val) {
+      return val is string
+        && (
+          val == ''
+          || (val.size() <= 35000 && val.matches('^data:image/(jpeg|webp|png);base64,[A-Za-z0-9+/=]+$'))
+        );
+    }
+
+    function isValidEmployee(data) {
+      return data.keys().hasAll(['name', 'department', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['name', 'department', 'avatarPreset', 'avatarPhoto', 'createdAt', 'updatedAt'])
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
+        && isValidDepartment(data.department)
+        && (!('avatarPreset' in data) || (data.avatarPreset is string && data.avatarPreset.size() <= 32))
+        && (!('avatarPhoto' in data) || isValidAvatarPhoto(data.avatarPhoto))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDailyOffStatus(data) {
+      return data.keys().hasAll(['date', 'offEmployeeIds', 'updatedAt'])
+        && data.keys().hasOnly(['date', 'offEmployeeIds', 'updatedAt'])
+        && isValidDateString(data.date)
+        && data.offEmployeeIds is list
+        && data.offEmployeeIds.size() <= 100
+        && (
+          data.offEmployeeIds.size() == 0
+          || isValidId(data.offEmployeeIds[0])
+        )
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidMonthlyOffStatus(data) {
+      return data.keys().hasAll(['month', 'entries', 'updatedAt'])
+        && data.keys().hasOnly(['month', 'entries', 'updatedAt'])
+        && isValidMonthString(data.month)
+        && data.entries is list
+        && data.entries.size() <= 100
+        && (
+          data.entries.size() == 0
+          || (
+            data.entries[0] is map
+            && data.entries[0].keys().hasAll(['employeeId', 'dates'])
+            && data.entries[0].keys().hasOnly(['employeeId', 'dates'])
+            && isValidId(data.entries[0].employeeId)
+            && data.entries[0].dates is list
+            && data.entries[0].dates.size() >= 1
+            && data.entries[0].dates.size() <= 31
+            && isValidDateString(data.entries[0].dates[0])
+          )
+        )
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidEmployeeQuota(data) {
+      return data.keys().hasAll(['employeeId', 'annualLeaveInitial', 'personalLeaveInitial', 'updatedAt'])
+        && data.keys().hasOnly(['employeeId', 'annualLeaveInitial', 'personalLeaveInitial', 'updatedAt'])
+        && isValidId(data.employeeId)
+        && data.annualLeaveInitial is number && data.annualLeaveInitial >= 0 && data.annualLeaveInitial <= 60
+        && data.personalLeaveInitial is number && data.personalLeaveInitial == 5
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidManager(data) {
+      return data.keys().hasAll(['email', 'name', 'role', 'addedBy', 'createdAt'])
+        && data.keys().hasOnly(['email', 'name', 'role', 'addedBy', 'createdAt'])
+        && isValidEmailId(data.email)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
+        && data.role is string && data.role == 'manager'
+        && data.addedBy is string && data.addedBy.size() >= 3 && data.addedBy.size() <= 160
+        && data.createdAt is timestamp;
+    }
+
+    function isValidCompanyHoliday(data) {
+      return data.keys().hasAll(['date', 'title', 'category', 'year', 'note', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['date', 'title', 'category', 'year', 'note', 'createdAt', 'updatedAt'])
+        && isValidDateString(data.date)
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 120
+        && data.category is string && data.category in ['Lễ/Tết', 'Nghỉ bù', 'Ngày làm việc bù', 'Nghỉ công ty']
+        && data.year is number && data.year >= 2020 && data.year <= 2100
+        && data.note is string && data.note.size() <= 300
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAllocations(listVal) {
+      return listVal is list
+        && listVal.size() <= 6
+        && (
+          listVal.size() == 0
+          || (
+            listVal[0] is map
+            && listVal[0].keys().hasAll(['type', 'days'])
+            && listVal[0].keys().hasOnly(['type', 'days'])
+            && listVal[0].type is string
+            && listVal[0].type in ['Phép năm', 'Nghỉ việc riêng', 'Nghỉ ốm', 'Thai sản', 'Nghỉ hưởng lương', 'Nghỉ không lương']
+            && listVal[0].days is number && listVal[0].days >= 0 && listVal[0].days <= 365
+          )
+        );
+    }
+
+    function isValidLeaveRequest(data) {
+      return data.keys().hasAll([
+          'employeeId', 'employeeName', 'department', 'startDate', 'endDate',
+          'workingDays', 'reason', 'note', 'status', 'allocations',
+          'hasHospitalCert', 'attachmentName', 'submitterUid', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'employeeId', 'employeeName', 'department', 'startDate', 'endDate',
+          'workingDays', 'reason', 'note', 'status', 'allocations',
+          'hasHospitalCert', 'hospitalCertPending', 'attachmentName', 'attachmentUrl',
+          'rejectionReason', 'processedBy', 'processedAt', 'emailHash', 'submitterUid',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.employeeId)
+        && data.employeeName is string && data.employeeName.size() >= 2 && data.employeeName.size() <= 100
+        && isValidDepartment(data.department)
+        && isValidDateString(data.startDate)
+        && isValidDateString(data.endDate)
+        && data.workingDays is number && data.workingDays >= 0.5 && data.workingDays <= 365
+        && data.reason is string && data.reason.size() >= 2 && data.reason.size() <= 500
+        && data.note is string && data.note.size() <= 500
+        && data.status is string && data.status in ['Mới tạo', 'Đang chờ duyệt', 'Đã duyệt', 'Từ chối']
+        && isValidAllocations(data.allocations)
+        && data.hasHospitalCert is bool
+        && (!('hospitalCertPending' in data) || data.hospitalCertPending is bool)
+        && data.attachmentName is string && data.attachmentName.size() <= 180
+        && (!('attachmentUrl' in data) || isValidDriveUrl(data.attachmentUrl))
+        && (!('rejectionReason' in data) || (data.rejectionReason is string && data.rejectionReason.size() <= 500))
+        && (!('processedBy' in data) || (data.processedBy is string && data.processedBy.size() <= 120))
+        && (!('processedAt' in data) || (data.processedAt is string && data.processedAt.size() <= 64))
+        && (!('emailHash' in data) || isValidSha256Id(data.emailHash))
+        && isValidId(data.submitterUid)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLeaveRequestContact(data) {
+      return data.keys().hasAll(['requestId', 'email', 'submitterUid', 'createdAt'])
+        && data.keys().hasOnly(['requestId', 'email', 'submitterUid', 'createdAt'])
+        && isValidId(data.requestId)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && isValidId(data.submitterUid)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidEmailLookupRequest(data) {
+      return data.keys().hasAll([
+          'requestId', 'emailHash', 'employeeId', 'employeeName', 'department',
+          'startDate', 'endDate', 'workingDays', 'reason', 'status',
+          'allocations', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'requestId', 'emailHash', 'employeeId', 'employeeName', 'department',
+          'startDate', 'endDate', 'workingDays', 'reason', 'status',
+          'allocations', 'hospitalCertPending', 'attachmentUrl',
+          'rejectionReason', 'processedBy', 'processedAt',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.requestId)
+        && isValidSha256Id(data.emailHash)
+        && isValidId(data.employeeId)
+        && data.employeeName is string && data.employeeName.size() >= 2 && data.employeeName.size() <= 100
+        && isValidDepartment(data.department)
+        && isValidDateString(data.startDate)
+        && isValidDateString(data.endDate)
+        && data.workingDays is number && data.workingDays >= 0.5 && data.workingDays <= 365
+        && data.reason is string && data.reason.size() >= 2 && data.reason.size() <= 500
+        && data.status is string && data.status in ['Mới tạo', 'Đang chờ duyệt', 'Đã duyệt', 'Từ chối']
+        && isValidAllocations(data.allocations)
+        && (!('hospitalCertPending' in data) || data.hospitalCertPending is bool)
+        && (!('attachmentUrl' in data) || isValidDriveUrl(data.attachmentUrl))
+        && (!('rejectionReason' in data) || (data.rejectionReason is string && data.rejectionReason.size() <= 500))
+        && (!('processedBy' in data) || (data.processedBy is string && data.processedBy.size() <= 120))
+        && (!('processedAt' in data) || (data.processedAt is string && data.processedAt.size() <= 64))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['recipientType', 'recipientUid', 'requestId', 'title', 'message', 'isRead', 'createdAt'])
+        && data.keys().hasOnly(['recipientType', 'recipientUid', 'requestId', 'title', 'message', 'isRead', 'createdAt'])
+        && data.recipientType is string && data.recipientType in ['admin', 'employee']
+        && isValidId(data.recipientUid)
+        && isValidId(data.requestId)
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 160
+        && data.message is string && data.message.size() >= 2 && data.message.size() <= 500
+        && data.isRead is bool
+        && data.createdAt is timestamp;
+    }
+
+    // 1. Internal Employee Directory (name & department only, needed for leave submission dropdown)
+    match /employees/{employeeId} {
+      allow get: if isValidId(employeeId);
+      allow list: if resource.data.department in ['Quản lý', 'Nhân sự'];
+      allow create: if isValidId(employeeId)
+        && isManager()
+        && isValidEmployee(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(employeeId)
+        && isManager()
+        && isValidEmployee(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'department', 'avatarPreset', 'avatarPhoto', 'updatedAt']);
+      allow delete: if isValidId(employeeId) && isManager();
+    }
+
+    // 2. Manager-only Employee Quotas (Phép năm & Nghỉ cá nhân 5 ngày)
+    match /employeeQuotas/{employeeId} {
+      allow get: if isValidId(employeeId) && isManager();
+      allow list: if isManager() && resource.data.personalLeaveInitial == 5;
+      allow create: if isValidId(employeeId)
+        && isManager()
+        && isValidEmployeeQuota(incoming())
+        && incoming().employeeId == employeeId
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/employees/$(employeeId));
+      allow update: if isValidId(employeeId)
+        && isManager()
+        && isValidEmployeeQuota(incoming())
+        && incoming().employeeId == existing().employeeId
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['annualLeaveInitial', 'personalLeaveInitial', 'updatedAt']);
+      allow delete: if isValidId(employeeId) && isManager();
+    }
+
+    // 3. Authorized Managers (managed by primary Super Admin)
+    match /managers/{managerEmail} {
+      allow get: if isValidEmailId(managerEmail) && (
+        isSuperAdmin()
+        || (isVerifiedUser() && request.auth.token.email.lower() == managerEmail)
+      );
+      allow list: if isManager() && resource.data.role == 'manager';
+      allow create: if isValidEmailId(managerEmail)
+        && isSuperAdmin()
+        && isValidManager(incoming())
+        && incoming().email == managerEmail
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidEmailId(managerEmail)
+        && isSuperAdmin()
+        && managerEmail != 'mynamelink1998@gmail.com';
+    }
+
+    // 4. Company Holidays (non-PII company calendar)
+    match /companyHolidays/{holidayId} {
+      allow get: if isValidId(holidayId);
+      allow list: if resource.data.year >= 2020;
+      allow create: if isValidId(holidayId)
+        && isManager()
+        && isValidCompanyHoliday(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(holidayId)
+        && isManager()
+        && isValidCompanyHoliday(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['date', 'title', 'category', 'year', 'note', 'updatedAt']);
+      allow delete: if isValidId(holidayId) && isManager();
+    }
+
+    // 4b. Non-PII Daily Off Employee IDs for "Hôm nay ai đi làm" & "Ngày nghỉ công ty" (single date get for employees; list only for Managers)
+    match /dailyOffStatus/{dateKey} {
+      allow get: if isValidDateString(dateKey);
+      allow list: if isManager();
+      allow create: if isValidDateString(dateKey)
+        && isManager()
+        && isValidDailyOffStatus(incoming())
+        && incoming().date == dateKey
+        && incoming().updatedAt == request.time;
+      allow update: if isValidDateString(dateKey)
+        && isManager()
+        && isValidDailyOffStatus(incoming())
+        && incoming().date == existing().date
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['offEmployeeIds', 'updatedAt']);
+      allow delete: if isValidDateString(dateKey) && isManager();
+    }
+
+    // 4c. Non-PII Monthly Off Employee Dates for employee "Chi tiết tháng đang chọn" (single month get for employees; list/write only for Managers)
+    match /monthlyOffStatus/{monthKey} {
+      allow get: if isValidMonthString(monthKey);
+      allow list: if isManager();
+      allow create: if isValidMonthString(monthKey)
+        && isManager()
+        && isValidMonthlyOffStatus(incoming())
+        && incoming().month == monthKey
+        && incoming().updatedAt == request.time;
+      allow update: if isValidMonthString(monthKey)
+        && isManager()
+        && isValidMonthlyOffStatus(incoming())
+        && incoming().month == existing().month
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['entries', 'updatedAt']);
+      allow delete: if isValidMonthString(monthKey) && isManager();
+    }
+
+    // 5. Leave Requests (STRICTLY Manager-only create, read, list, update)
+    match /leaveRequests/{requestId} {
+      allow get: if isValidId(requestId) && isManager();
+      allow list: if isManager();
+      allow create: if isValidId(requestId)
+        && isManager()
+        && isValidLeaveRequest(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/employees/$(incoming().employeeId));
+      allow update: if isValidId(requestId)
+        && isManager()
+        && isValidLeaveRequest(incoming())
+        && incoming().submitterUid == existing().submitterUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'status', 'allocations', 'hasHospitalCert', 'hospitalCertPending', 'rejectionReason',
+          'processedBy', 'processedAt', 'emailHash', 'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    // 6. Isolated PII Contacts (Manager-only read and write)
+    match /leaveRequestContacts/{requestId} {
+      allow get: if isValidId(requestId) && isManager();
+      allow list: if isManager();
+      allow create: if isValidId(requestId)
+        && isManager()
+        && isValidLeaveRequestContact(incoming())
+        && incoming().requestId == requestId
+        && incoming().createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/leaveRequests/$(requestId));
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // 7. Email-Hash-Scoped Status Lookup (Manager writes; exact email SHA-256 read for employees if email was provided)
+    match /emailLookups/{emailHash}/requests/{requestId} {
+      allow get: if isValidSha256Id(emailHash)
+        && isValidId(requestId)
+        && (isManager() || existing().emailHash == emailHash);
+      allow list: if isManager()
+        || (isValidSha256Id(emailHash) && resource.data.emailHash == emailHash);
+      allow create: if isValidSha256Id(emailHash)
+        && isValidId(requestId)
+        && isManager()
+        && isValidEmailLookupRequest(incoming())
+        && incoming().emailHash == emailHash
+        && incoming().requestId == requestId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/leaveRequests/$(requestId))
+        && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.employeeId == incoming().employeeId;
+      allow update: if isValidSha256Id(emailHash)
+        && isValidId(requestId)
+        && isManager()
+        && isValidEmailLookupRequest(incoming())
+        && incoming().emailHash == existing().emailHash
+        && incoming().requestId == existing().requestId
+        && incoming().employeeId == existing().employeeId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'status', 'allocations', 'hospitalCertPending', 'rejectionReason', 'processedBy', 'processedAt', 'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    // 8. Notifications (Manager-only create/read/list/update/delete)
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && isManager();
+      allow list: if isManager();
+      allow create: if isValidId(notificationId)
+        && isManager()
+        && isValidNotification(incoming())
+        && incoming().isRead == false
+        && incoming().createdAt == request.time
+        && (
+          (
+            incoming().recipientType == 'admin'
+            && incoming().recipientUid == 'admin'
+            && existsAfter(/databases/$(database)/documents/leaveRequests/$(incoming().requestId))
+          )
+          || incoming().recipientType == 'employee'
+        );
+      allow update: if isValidId(notificationId)
+        && isManager()
+        && isValidNotification(incoming())
+        && incoming().recipientType == existing().recipientType
+        && incoming().recipientUid == existing().recipientUid
+        && incoming().requestId == existing().requestId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
+      allow delete: if isValidId(notificationId) && isManager();
+    }
+  }
+}

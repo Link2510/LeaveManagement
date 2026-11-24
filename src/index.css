@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-display: 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-sans: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #f8fafc;
+    color: #0f172a;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-mono-num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes lm-bobble-sway-a {
+  0%, 100% {
+    transform: rotate(-12deg) translate3d(-3px, 1.8px, 0);
+  }
+  25% {
+    transform: rotate(0deg) translate3d(0, -2px, 0);
+  }
+  50% {
+    transform: rotate(12deg) translate3d(3px, 1.8px, 0);
+  }
+  75% {
+    transform: rotate(0deg) translate3d(0, -2px, 0);
+  }
+}
+
+@keyframes lm-bobble-sway-b {
+  0%, 100% {
+    transform: rotate(12deg) translate3d(3px, 1.8px, 0);
+  }
+  25% {
+    transform: rotate(0deg) translate3d(0, -2px, 0);
+  }
+  50% {
+    transform: rotate(-12deg) translate3d(-3px, 1.8px, 0);
+  }
+  75% {
+    transform: rotate(0deg) translate3d(0, -2px, 0);
+  }
+}
+
+@keyframes lm-bobble-sway-sm {
+  0%, 100% {
+    transform: rotate(-6deg) translate3d(-1.2px, 0.8px, 0);
+  }
+  50% {
+    transform: rotate(6deg) translate3d(1.2px, 0.8px, 0);
+  }
+}
+
+@keyframes lm-bobble-body-hum {
+  0%, 50%, 100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate3d(0, -1.6px, 0) rotate(-1.2deg);
+  }
+  75% {
+    transform: translate3d(0, -1.6px, 0) rotate(1.2deg);
+  }
+}
+

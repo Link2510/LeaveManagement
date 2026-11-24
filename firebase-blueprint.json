@@ -1,0 +1,510 @@
+{
+  "entities": {
+    "Employee": {
+      "title": "Employee",
+      "description": "Public employee directory record without sensitive leave quota details.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100,
+          "description": "Full name of the employee."
+        },
+        "department": {
+          "type": "string",
+          "enum": ["Quản lý", "Nhân sự"],
+          "description": "Department name."
+        },
+        "avatarPreset": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Optional character body/theme preset ID."
+        },
+        "avatarPhoto": {
+          "type": "string",
+          "maxLength": 35000,
+          "description": "Optional compressed JPEG/WebP/PNG portrait data URL for the bobbing head."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["name", "department", "createdAt", "updatedAt"]
+    },
+    "EmployeeQuota": {
+      "title": "EmployeeQuota",
+      "description": "Manager-only leave quota balances for each employee (annual leave and fixed 5-day personal leave).",
+      "type": "object",
+      "properties": {
+        "employeeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "annualLeaveInitial": {
+          "type": "number"
+        },
+        "personalLeaveInitial": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["employeeId", "annualLeaveInitial", "personalLeaveInitial", "updatedAt"]
+    },
+    "Manager": {
+      "title": "Manager",
+      "description": "Authorized Manager account allowed to sign in and manage employee leave requests and statistics.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "role": {
+          "type": "string",
+          "enum": ["manager"]
+        },
+        "addedBy": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["email", "name", "role", "addedBy", "createdAt"]
+    },
+    "CompanyHoliday": {
+      "title": "CompanyHoliday",
+      "description": "Company holiday, Tet break, compensatory day off, or compensatory working day.",
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "category": {
+          "type": "string",
+          "enum": ["Lễ/Tết", "Nghỉ bù", "Ngày làm việc bù", "Nghỉ công ty"]
+        },
+        "year": {
+          "type": "number"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["date", "title", "category", "year", "note", "createdAt", "updatedAt"]
+    },
+    "LeaveRequest": {
+      "title": "LeaveRequest",
+      "description": "Leave registration and approval workflow document (non-PII fields, readable only by Managers).",
+      "type": "object",
+      "properties": {
+        "employeeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "employeeName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "department": {
+          "type": "string",
+          "enum": ["Quản lý", "Nhân sự"]
+        },
+        "startDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "endDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\d{2}$"
+        },
+        "workingDays": {
+          "type": "number"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 500
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Mới tạo", "Đang chờ duyệt", "Đã duyệt", "Từ chối"]
+        },
+        "allocations": {
+          "type": "array",
+          "description": "Up to 6 leave type allocations assigned during submission or manager approval."
+        },
+        "hasHospitalCert": {
+          "type": "boolean"
+        },
+        "hospitalCertPending": {
+          "type": "boolean"
+        },
+        "attachmentName": {
+          "type": "string",
+          "maxLength": 180
+        },
+        "attachmentUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "pattern": "^https://(drive|docs)\\.google\\.com/[^\\s]+$"
+        },
+        "rejectionReason": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "processedBy": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "processedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "emailHash": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "submitterUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "employeeId",
+        "employeeName",
+        "department",
+        "startDate",
+        "endDate",
+        "workingDays",
+        "reason",
+        "note",
+        "status",
+        "allocations",
+        "hasHospitalCert",
+        "attachmentName",
+        "submitterUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "LeaveRequestContact": {
+      "title": "LeaveRequestContact",
+      "description": "Isolated PII email contact for a leave request, readable only by Managers.",
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "submitterUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["requestId", "email", "submitterUid", "createdAt"]
+    },
+    "EmailLookupRequest": {
+      "title": "EmailLookupRequest",
+      "description": "Private email-hash-scoped status summary enabling employees to check only their own leave requests without exposing other employees' leave schedules.",
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "emailHash": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "employeeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "employeeName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "department": {
+          "type": "string",
+          "enum": ["Quản lý", "Nhân sự"]
+        },
+        "startDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "endDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "workingDays": {
+          "type": "number"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 500
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Mới tạo", "Đang chờ duyệt", "Đã duyệt", "Từ chối"]
+        },
+        "allocations": {
+          "type": "array"
+        },
+        "hospitalCertPending": {
+          "type": "boolean"
+        },
+        "attachmentUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "pattern": "^https://(drive|docs)\\.google\\.com/[^\\s]+$"
+        },
+        "rejectionReason": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "processedBy": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "processedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "requestId",
+        "emailHash",
+        "employeeId",
+        "employeeName",
+        "department",
+        "startDate",
+        "endDate",
+        "workingDays",
+        "reason",
+        "status",
+        "allocations",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "DailyOffStatus": {
+      "title": "DailyOffStatus",
+      "description": "Non-PII daily index of employee IDs on approved leave for a single date so the attendance board and company holiday calendar show absent employees without exposing leave records.",
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "offEmployeeIds": {
+          "type": "array"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["date", "offEmployeeIds", "updatedAt"]
+    },
+    "MonthlyOffStatus": {
+      "title": "MonthlyOffStatus",
+      "description": "Non-PII monthly index of employees on approved leave and their exact working dates in that month, enabling employees to view who is off during the selected month without exposing private leave records.",
+      "type": "object",
+      "properties": {
+        "month": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 7,
+          "pattern": "^\\d{4}-\\d{2}$"
+        },
+        "entries": {
+          "type": "array"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["month", "entries", "updatedAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app notification alert for Managers.",
+      "type": "object",
+      "properties": {
+        "recipientType": {
+          "type": "string",
+          "enum": ["admin", "employee"]
+        },
+        "recipientUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 160
+        },
+        "message": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 500
+        },
+        "isRead": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["recipientType", "recipientUid", "requestId", "title", "message", "isRead", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/employees/{employeeId}": {
+      "schema": { "$ref": "#/entities/Employee" },
+      "description": "Employee directory names, departments, and avatar presets."
+    },
+    "/employeeQuotas/{employeeId}": {
+      "schema": { "$ref": "#/entities/EmployeeQuota" },
+      "description": "Manager-only annual leave and fixed 5-day personal leave quotas."
+    },
+    "/managers/{managerEmail}": {
+      "schema": { "$ref": "#/entities/Manager" },
+      "description": "Authorized manager emails granted access to management views and approvals."
+    },
+    "/companyHolidays/{holidayId}": {
+      "schema": { "$ref": "#/entities/CompanyHoliday" },
+      "description": "Company holidays, Tet, compensatory off days, and compensatory working days."
+    },
+    "/dailyOffStatus/{dateKey}": {
+      "schema": { "$ref": "#/entities/DailyOffStatus" },
+      "description": "Non-PII daily absent employee ID list for the working-today board and company holiday calendar day-detail view."
+    },
+    "/monthlyOffStatus/{monthKey}": {
+      "schema": { "$ref": "#/entities/MonthlyOffStatus" },
+      "description": "Non-PII monthly index of employees on approved leave and their exact off dates for the company holiday monthly summary."
+    },
+    "/leaveRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/LeaveRequest" },
+      "description": "Leave requests, calendar entries, and approval workflow state (Manager-only read)."
+    },
+    "/leaveRequestContacts/{requestId}": {
+      "schema": { "$ref": "#/entities/LeaveRequestContact" },
+      "description": "Isolated PII email contact per leave request."
+    },
+    "/emailLookups/{emailHash}/requests/{requestId}": {
+      "schema": { "$ref": "#/entities/EmailLookupRequest" },
+      "description": "Email-hash-keyed leave request status records for self-service employee lookup."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Notifications sent to Managers or recorded for request lifecycle transitions."
+    }
+  }
+}

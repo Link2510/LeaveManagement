@@ -1,0 +1,188 @@
+import type { CompanyHoliday, HolidayCategory } from '../types/leave';
+
+export function getHolidayCategoryLabel(category: HolidayCategory): string {
+  return category === 'Ngày làm việc bù' ? 'OT' : category;
+}
+
+export function toDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function parseDateKey(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
+export function formatDateVN(dateStr: string): string {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  const [y, m, d] = dateStr.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+const WEEKDAY_NAMES_VN = [
+  'Chủ nhật',
+  'Thứ 2',
+  'Thứ 3',
+  'Thứ 4',
+  'Thứ 5',
+  'Thứ 6',
+  'Thứ 7',
+];
+
+export function getWeekdayLabelVN(dateStr: string): string {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return '';
+  const d = parseDateKey(dateStr);
+  if (Number.isNaN(d.getTime())) return '';
+  return WEEKDAY_NAMES_VN[d.getDay()] || '';
+}
+
+export function formatDateTimeVN(value?: string | number): string {
+  if (!value) return '—';
+  const d = typeof value === 'number' ? new Date(value) : new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * Quy tắc ngày làm việc:
+ * - Mặc định Thứ 2 -> Thứ 6 là ngày làm việc; Thứ 7 và Chủ nhật KHÔNG làm việc.
+ * - Ngày có cấu hình 'Ngày làm việc bù' (kể cả Thứ 7 / Chủ nhật) được tính là ngày làm việc.
+ * - Ngày có cấu hình 'Lễ/Tết', 'Nghỉ bù', 'Nghỉ công ty' được tính là ngày nghỉ (không tính ngày làm việc).
+ */
+export function isWorkingDay(
+  dateKey: string,
+  holidaysOrMap: CompanyHoliday[] | Map<string, CompanyHoliday>,
+): boolean {
+  const holiday =
+    holidaysOrMap instanceof Map
+      ? holidaysOrMap.get(dateKey)
+      : holidaysOrMap.find((h) => h.date === dateKey);
+
+  if (holiday) {
+    return holiday.category === 'Ngày làm việc bù';
+  }
+
+  const d = parseDateKey(dateKey);
+  const dow = d.getDay(); // 0 = CN, 6 = T7
+  return dow !== 0 && dow !== 6;
+}
+
+export function calculateWorkingDays(
+  startDate: string,
+  endDate: string,
+  holidays: CompanyHoliday[],
+): {
+  workingDays: number;
+  weekendDaysExcluded: number;
+  excludedHolidays: CompanyHoliday[];
+  makeupWorkdays: CompanyHoliday[];
+} {
+  if (!startDate || !endDate) {
+    return {
+      workingDays: 0,
+      weekendDaysExcluded: 0,
+      excludedHolidays: [],
+      makeupWorkdays: [],
+    };
+  }
+  const start = parseDateKey(startDate);
+  const end = parseDateKey(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+    return {
+      workingDays: 0,
+      weekendDaysExcluded: 0,
+      excludedHolidays: [],
+      makeupWorkdays: [],
+    };
+  }
+
+  const holidayMap = new Map<string, CompanyHoliday>();
+  for (const h of holidays) {
+    holidayMap.set(h.date, h);
+  }
+
+  let workingDays = 0;
+  let weekendDaysExcluded = 0;
+  const excludedHolidays: CompanyHoliday[] = [];
+  const makeupWorkdays: CompanyHoliday[] = [];
+
+  const cursor = new Date(start);
+  let safety = 0;
+  while (cursor <= end && safety < 400) {
+    safety += 1;
+    const key = toDateKey(cursor);
+    const dayOfWeek = cursor.getDay(); // 0 = Sun, 6 = Sat
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const holiday = holidayMap.get(key);
+
+    if (holiday) {
+      if (holiday.category === 'Ngày làm việc bù') {
+        workingDays += 1;
+        makeupWorkdays.push(holiday);
+      } else {
+        excludedHolidays.push(holiday);
+      }
+    } else if (!isWeekend) {
+      workingDays += 1;
+    } else {
+      weekendDaysExcluded += 1;
+    }
+
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return { workingDays, weekendDaysExcluded, excludedHolidays, makeupWorkdays };
+}
+
+export function isDateInRange(dayKey: string, startDate: string, endDate: string): boolean {
+  return dayKey >= startDate && dayKey <= endDate;
+}
+
+export function getMonthCalendarCells(year: number, monthIndex: number): Array<{
+  dateKey: string;
+  dayNumber: number;
+  isCurrentMonth: boolean;
+  isWeekend: boolean;
+}> {
+  const firstDay = new Date(year, monthIndex, 1);
+  const lastDay = new Date(year, monthIndex + 1, 0);
+  const startOffset = (firstDay.getDay() + 6) % 7;
+  const totalDays = lastDay.getDate();
+
+  const cells: Array<{
+    dateKey: string;
+    dayNumber: number;
+    isCurrentMonth: boolean;
+    isWeekend: boolean;
+  }> = [];
+
+  const gridStart = new Date(year, monthIndex, 1 - startOffset);
+  const totalCells = Math.ceil((startOffset + totalDays) / 7) * 7;
+
+  for (let i = 0; i < totalCells; i += 1) {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
+    const dow = d.getDay();
+    cells.push({
+      dateKey: toDateKey(d),
+      dayNumber: d.getDate(),
+      isCurrentMonth: d.getMonth() === monthIndex,
+      isWeekend: dow === 0 || dow === 6,
+    });
+  }
+
+  return cells;
+}
+
+export function getTodayKey(): string {
+  return toDateKey(new Date());
+}

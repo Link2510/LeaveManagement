@@ -1,0 +1,6 @@
+{
+  "name": "LeaveManagement - Quản Lý Nghỉ Phép",
+  "description": "Hệ thống đăng ký, thống kê, lịch nghỉ tháng và phê duyệt đơn nghỉ phép nội bộ cho nhân viên và quản trị viên.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
