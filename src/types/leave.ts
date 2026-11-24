@@ -37,7 +37,7 @@ export interface EmployeeQuota {
 
 export interface ManagerAccount {
   id: string;
-  email: string;
+  username: string;
   name: string;
   role: 'manager';
   addedBy: string;

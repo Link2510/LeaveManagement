@@ -4,7 +4,7 @@ import type { Department, EmployeeStats, ManagerAccount } from '../types/leave';
 import { FIXED_PERSONAL_LEAVE_DAYS } from '../types/leave';
 import {
   addEmployeeWithQuota,
-  addManagerAccount,
+  createManagerAccountWithPassword,
   deleteEmployeeWithQuota,
   removeManagerAccount,
   updateEmployeeWithQuota,
@@ -35,7 +35,9 @@ export function EmployeeManager({
   const [error, setError] = useState('');
 
   const [mgrName, setMgrName] = useState('');
-  const [mgrEmail, setMgrEmail] = useState('');
+  const [mgrUsername, setMgrUsername] = useState('');
+  const [mgrPassword, setMgrPassword] = useState('');
+  const [mgrConfirmPassword, setMgrConfirmPassword] = useState('');
   const [mgrSaving, setMgrSaving] = useState(false);
   const [mgrError, setMgrError] = useState('');
 
@@ -137,35 +139,69 @@ export function EmployeeManager({
     }
   };
 
+
   const handleAddManager = async (e: React.FormEvent) => {
     e.preventDefault();
     setMgrError('');
-    const cleanEmail = mgrEmail.trim().toLowerCase();
+
+    const cleanUsername = mgrUsername.trim().toLowerCase();
     const cleanName = mgrName.trim();
+    const cleanPassword = mgrPassword;
+
     if (cleanName.length < 2) {
       setMgrError('Vui lòng nhập tên quản lý (ít nhất 2 ký tự).');
       return;
     }
-    if (!/^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$/.test(cleanEmail)) {
-      setMgrError('Địa chỉ email Google không hợp lệ.');
+
+    if (!/^[a-z0-9._]{4,30}$/.test(cleanUsername)) {
+      setMgrError(
+        'Username phải có 4–30 ký tự, chỉ gồm chữ thường, số, dấu chấm và dấu gạch dưới.',
+      );
       return;
     }
-    if (cleanEmail === ADMIN_EMAIL.toLowerCase()) {
-      setMgrError('Tài khoản này đã là Quản trị viên chính mặc định.');
+
+    if (cleanPassword.length < 6) {
+      setMgrError('Mật khẩu phải có ít nhất 6 ký tự.');
+      return;
+    }
+
+    if (cleanPassword !== mgrConfirmPassword) {
+      setMgrError('Mật khẩu xác nhận không khớp.');
       return;
     }
 
     setMgrSaving(true);
+
     try {
-      await addManagerAccount(cleanEmail, cleanName, currentAdminEmail);
+      await createManagerAccountWithPassword(
+        cleanUsername,
+        cleanName,
+        cleanPassword,
+        currentAdminEmail,
+      );
+
       setMgrName('');
-      setMgrEmail('');
+      setMgrUsername('');
+      setMgrPassword('');
+      setMgrConfirmPassword('');
     } catch (err) {
-      setMgrError(err instanceof Error ? err.message : 'Không thể cấp quyền quản lý.');
+      const code =
+        typeof err === 'object' && err !== null && 'code' in err
+          ? String((err as { code?: unknown }).code)
+          : '';
+
+      if (code === 'auth/email-already-in-use') {
+        setMgrError('Username này đã được sử dụng.');
+      } else {
+        setMgrError(
+          err instanceof Error ? err.message : 'Không thể tạo tài khoản quản lý.',
+        );
+      }
     } finally {
       setMgrSaving(false);
     }
   };
+
 
   return (
     <div className="space-y-6">
@@ -303,11 +339,10 @@ export function EmployeeManager({
                       type="button"
                       onClick={() => setNewAvatarPreset(preset.id)}
                       title={preset.label}
-                      className={`p-1 rounded-xl border transition-colors ${
-                        selected
-                          ? 'border-teal-600 bg-teal-50 ring-2 ring-teal-600/20'
-                          : 'border-slate-200 hover:border-slate-300 bg-white'
-                      }`}
+                      className={`p-1 rounded-xl border transition-colors ${selected
+                        ? 'border-teal-600 bg-teal-50 ring-2 ring-teal-600/20'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                        }`}
                     >
                       <BobbleAvatar
                         presetId={preset.id}
@@ -402,11 +437,10 @@ export function EmployeeManager({
                                   type="button"
                                   onClick={() => setEditAvatarPreset(preset.id)}
                                   title={preset.label}
-                                  className={`p-0.5 rounded-xl border ${
-                                    editAvatarPreset === preset.id
-                                      ? 'border-teal-600 bg-teal-50'
-                                      : 'border-slate-200 bg-white'
-                                  }`}
+                                  className={`p-0.5 rounded-xl border ${editAvatarPreset === preset.id
+                                    ? 'border-teal-600 bg-teal-50'
+                                    : 'border-slate-200 bg-white'
+                                    }`}
                                 >
                                   <BobbleAvatar
                                     presetId={preset.id}
@@ -554,25 +588,27 @@ export function EmployeeManager({
               </h3>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Các email Google trong danh sách này có thể đăng nhập để xem lịch nghỉ toàn công ty, bảng thống kê phép và duyệt đơn.
-            </p>
+  Các tài khoản Admin được Super Admin cấp username và mật khẩu có thể đăng nhập để quản lý lịch nghỉ, thống kê phép và duyệt đơn.
+</p>
           </div>
         </div>
+
 
         {isSuperAdmin && (
           <form
             onSubmit={handleAddManager}
-            className="p-6 border-b border-slate-200 bg-slate-50/50 space-y-3"
+            className="p-6 border-b border-slate-200 bg-slate-50/50 space-y-4"
           >
             {mgrError && (
               <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800">
                 {mgrError}
               </div>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-              <div className="md:col-span-4">
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
                 <label htmlFor="mgr-name" className="block text-xs font-medium text-slate-700 mb-1.5">
-                  Tên Quản lý
+                  Họ và tên Admin
                 </label>
                 <input
                   id="mgr-name"
@@ -584,33 +620,80 @@ export function EmployeeManager({
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
                 />
               </div>
-              <div className="md:col-span-5">
-                <label htmlFor="mgr-email" className="block text-xs font-medium text-slate-700 mb-1.5">
-                  Email Google dùng để đăng nhập
+
+              <div>
+                <label
+                  htmlFor="mgr-username"
+                  className="block text-xs font-medium text-slate-700 mb-1.5"
+                >
+                  Username đăng nhập
                 </label>
                 <input
-                  id="mgr-email"
-                  type="email"
-                  value={mgrEmail}
-                  onChange={(e) => setMgrEmail(e.target.value)}
-                  placeholder="quanly@gmail.com"
+                  id="mgr-username"
+                  type="text"
+                  value={mgrUsername}
+                  onChange={(e) => setMgrUsername(e.target.value.toLowerCase())}
+                  placeholder="Ví dụ: admin01"
+                  autoComplete="off"
+                  minLength={4}
+                  maxLength={30}
                   required
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
                 />
               </div>
-              <div className="md:col-span-3">
-                <button
-                  type="submit"
-                  disabled={mgrSaving}
-                  className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap"
-                >
-                  <Plus className="w-4 h-4" />
-                  Cấp quyền Quản lý
-                </button>
+
+              <div>
+                <label htmlFor="mgr-password" className="block text-xs font-medium text-slate-700 mb-1.5">
+                  Mật khẩu
+                </label>
+                <input
+                  id="mgr-password"
+                  type="password"
+                  value={mgrPassword}
+                  onChange={(e) => setMgrPassword(e.target.value)}
+                  placeholder="Ít nhất 6 ký tự"
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+                />
               </div>
+
+              <div>
+                <label htmlFor="mgr-confirm-password" className="block text-xs font-medium text-slate-700 mb-1.5">
+                  Xác nhận mật khẩu
+                </label>
+                <input
+                  id="mgr-confirm-password"
+                  type="password"
+                  value={mgrConfirmPassword}
+                  onChange={(e) => setMgrConfirmPassword(e.target.value)}
+                  placeholder="Nhập lại mật khẩu"
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p className="text-xs text-slate-500">
+                Username dài 4–30 ký tự. Admin đăng nhập bằng username và mật khẩu do Super Admin cấp.
+              </p>
+
+              <button
+                type="submit"
+                disabled={mgrSaving}
+                className="inline-flex items-center justify-center gap-1.5 px-5 py-2 text-sm font-medium text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4" />
+                {mgrSaving ? 'Đang tạo tài khoản...' : 'Tạo tài khoản Admin'}
+              </button>
             </div>
           </form>
         )}
+
 
         <div className="divide-y divide-slate-100 text-sm">
           <div className="px-6 py-3.5 flex items-center justify-between gap-4">
@@ -625,14 +708,14 @@ export function EmployeeManager({
             <div key={mgr.id} className="px-6 py-3.5 flex items-center justify-between gap-4 hover:bg-slate-50/70">
               <div>
                 <div className="font-medium text-slate-900">{mgr.name}</div>
-                <div className="text-xs text-slate-500 font-mono-num">{mgr.email}</div>
+                <div className="text-xs text-slate-500 font-mono-num">{mgr.username}</div>
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-xs font-medium text-slate-600">Quản lý</span>
                 {isSuperAdmin && (
                   <button
                     type="button"
-                    onClick={() => void removeManagerAccount(mgr.email)}
+                    onClick={() => void removeManagerAccount(mgr.id)}
                     className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 rounded-md transition-colors"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

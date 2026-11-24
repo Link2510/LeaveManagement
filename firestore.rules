@@ -40,9 +40,12 @@ service cloud.firestore {
     }
 
     function isManager() {
-      return isSuperAdmin()
-        || (isVerifiedUser() && exists(/databases/$(database)/documents/managers/$(request.auth.token.email.lower())));
-    }
+  return isSuperAdmin()
+    || (
+      isSignedIn()
+      && exists(/databases/$(database)/documents/managers/$(request.auth.uid))
+    );
+}
 
     function isValidDateString(val) {
       return val is string && val.size() == 10 && val.matches('^\\d{4}-\\d{2}-\\d{2}$');
@@ -126,15 +129,15 @@ service cloud.firestore {
     }
 
     function isValidManager(data) {
-      return data.keys().hasAll(['email', 'name', 'role', 'addedBy', 'createdAt'])
-        && data.keys().hasOnly(['email', 'name', 'role', 'addedBy', 'createdAt'])
-        && isValidEmailId(data.email)
+      return data.keys().hasAll(['username', 'name', 'role', 'addedBy', 'createdAt'])
+        && data.keys().hasOnly(['username', 'name', 'role', 'addedBy', 'createdAt'])
+        && data.username is string
+        && data.username.matches('^[a-z0-9._]{4,30}$')
         && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
         && data.role is string && data.role == 'manager'
         && data.addedBy is string && data.addedBy.size() >= 3 && data.addedBy.size() <= 160
         && data.createdAt is timestamp;
-    }
-
+}
     function isValidCompanyHoliday(data) {
       return data.keys().hasAll(['date', 'title', 'category', 'year', 'note', 'createdAt', 'updatedAt'])
         && data.keys().hasOnly(['date', 'title', 'category', 'year', 'note', 'createdAt', 'updatedAt'])
@@ -291,21 +294,25 @@ service cloud.firestore {
     }
 
     // 3. Authorized Managers (managed by primary Super Admin)
-    match /managers/{managerEmail} {
-      allow get: if isValidEmailId(managerEmail) && (
+    match /managers/{managerUid} {
+      allow get: if isValidId(managerUid) && (
         isSuperAdmin()
-        || (isVerifiedUser() && request.auth.token.email.lower() == managerEmail)
+        || (isSignedIn() && request.auth.uid == managerUid)
       );
-      allow list: if isManager() && resource.data.role == 'manager';
-      allow create: if isValidEmailId(managerEmail)
+
+      allow list: if isManager()
+        && resource.data.role == 'manager';
+
+      allow create: if isValidId(managerUid)
         && isSuperAdmin()
         && isValidManager(incoming())
-        && incoming().email == managerEmail
         && incoming().createdAt == request.time;
+
       allow update: if false;
-      allow delete: if isValidEmailId(managerEmail)
+
+      allow delete: if isValidId(managerUid)
         && isSuperAdmin()
-        && managerEmail != 'mynamelink1998@gmail.com';
+        && managerUid != request.auth.uid;
     }
 
     // 4. Company Holidays (non-PII company calendar)

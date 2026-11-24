@@ -14,7 +14,18 @@ import {
   writeBatch,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { ADMIN_EMAIL, db, handleFirestoreError, OperationType } from '../firebase';
+import {
+  createUserWithEmailAndPassword,
+  deleteUser,
+  signOut,
+} from 'firebase/auth';
+import {
+  ADMIN_EMAIL,
+  db,
+  handleFirestoreError,
+  managerCreationAuth,
+  OperationType,
+} from '../firebase';
 import {
   FIXED_PERSONAL_LEAVE_DAYS,
   INITIAL_EMPLOYEES,
@@ -56,30 +67,42 @@ function timestampToMs(val: unknown): number {
   return Date.now();
 }
 
+
+const MANAGER_LOGIN_DOMAIN = 'accounts.leave-management.invalid';
+
+function getManagerLoginEmail(username: string): string {
+  const cleanUsername = username.trim().toLowerCase();
+
+  if (!/^[a-z0-9._]{4,30}$/.test(cleanUsername)) {
+    throw new Error(
+      'Username phải có 4–30 ký tự, chỉ gồm chữ thường, số, dấu chấm và dấu gạch dưới.',
+    );
+  }
+
+  return `${cleanUsername}@${MANAGER_LOGIN_DOMAIN}`;
+}
+
 export function subscribeIsManager(
-  email: string | null | undefined,
-  emailVerified: boolean | undefined,
+  uid: string | null | undefined,
+  isSuperAdmin: boolean,
   onResult: (isMgr: boolean) => void,
 ): Unsubscribe {
-  const cleanEmail = (email || '').trim().toLowerCase();
-  if (!cleanEmail || !emailVerified) {
-    onResult(false);
-    return () => {};
-  }
-  if (cleanEmail === ADMIN_EMAIL.toLowerCase()) {
+  if (isSuperAdmin) {
     onResult(true);
     return () => {};
   }
 
-  const mgrDocRef = doc(db, 'managers', cleanEmail);
+  if (!uid) {
+    onResult(false);
+    return () => {};
+  }
+
+  const mgrDocRef = doc(db, 'managers', uid);
+
   return onSnapshot(
     mgrDocRef,
-    (snap) => {
-      onResult(snap.exists());
-    },
-    () => {
-      onResult(false);
-    },
+    (snap) => onResult(snap.exists()),
+    () => onResult(false),
   );
 }
 
@@ -91,22 +114,26 @@ export function subscribeManagers(
     onData([]);
     return () => {};
   }
+
   const path = 'managers';
   const q = query(collection(db, path), where('role', '==', 'manager'));
+
   return onSnapshot(
     q,
     (snapshot) => {
       const items: ManagerAccount[] = snapshot.docs.map((d) => {
         const data = d.data();
+
         return {
           id: d.id,
-          email: String(data.email || d.id),
+          username: String(data.username || ''),
           name: String(data.name || ''),
           role: 'manager',
           addedBy: String(data.addedBy || ''),
           createdAtMs: timestampToMs(data.createdAt),
         };
       });
+
       items.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
       onData(items);
     },
@@ -117,33 +144,103 @@ export function subscribeManagers(
 }
 
 export async function addManagerAccount(
-  email: string,
+  uid: string,
+  username: string,
   name: string,
   addedBy: string,
 ): Promise<void> {
-  const cleanEmail = email.trim().toLowerCase().slice(0, 160);
+  const cleanUsername = username.trim().toLowerCase();
   const cleanName = clampString(name, 100);
+
+  if (!/^[a-z0-9._]{4,30}$/.test(cleanUsername)) {
+    throw new Error('Username không hợp lệ.');
+  }
+
   try {
-    await setDoc(doc(db, 'managers', cleanEmail), {
-      email: cleanEmail,
+    await setDoc(doc(db, 'managers', uid), {
+      username: cleanUsername,
       name: cleanName,
       role: 'manager',
       addedBy: addedBy.trim().toLowerCase().slice(0, 160),
       createdAt: serverTimestamp(),
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, `managers/${cleanEmail}`);
+    handleFirestoreError(error, OperationType.CREATE, `managers/${uid}`);
+    throw error;
   }
 }
 
-export async function removeManagerAccount(email: string): Promise<void> {
-  const cleanEmail = email.trim().toLowerCase();
+export async function createManagerAccountWithPassword(
+  username: string,
+  name: string,
+  password: string,
+  addedBy: string,
+): Promise<void> {
+  const cleanUsername = username.trim().toLowerCase();
+  const loginEmail = getManagerLoginEmail(cleanUsername);
+
+  let createdUser: import('firebase/auth').User | null = null;
+
   try {
-    await deleteDoc(doc(db, 'managers', cleanEmail));
+    if (managerCreationAuth.currentUser) {
+      await signOut(managerCreationAuth);
+    }
+
+    const credential = await createUserWithEmailAndPassword(
+      managerCreationAuth,
+      loginEmail,
+      password,
+    );
+
+    createdUser = credential.user;
+
+    // Ghi quyền Admin bằng phiên Super Admin chính.
+    await addManagerAccount(
+      createdUser.uid,
+      cleanUsername,
+      name,
+      addedBy,
+    );
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `managers/${cleanEmail}`);
+    if (createdUser) {
+      try {
+        await deleteUser(createdUser);
+      } catch (cleanupError) {
+        console.error(
+          'Không thể xóa tài khoản Authentication sau khi tạo thất bại:',
+          cleanupError,
+        );
+
+        throw new Error(
+          'Tạo quyền Admin thất bại và không thể tự động hoàn tác tài khoản Authentication. Vui lòng kiểm tra Firebase Console.',
+        );
+      }
+    }
+
+    throw error;
+  } finally {
+    if (managerCreationAuth.currentUser) {
+      try {
+        await signOut(managerCreationAuth);
+      } catch (signOutError) {
+        console.error(
+          'Không thể đăng xuất phiên Auth phụ:',
+          signOutError,
+        );
+      }
+    }
   }
 }
+
+export async function removeManagerAccount(uid: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'managers', uid));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `managers/${uid}`);
+    throw error;
+  }
+}
+
 
 export async function seedInitialDataIfNeeded(isManager: boolean, managerUid: string): Promise<void> {
   if (!isManager || !managerUid) return;

@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
+import {
+  onAuthStateChanged,
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  signOut,
+  type User,
+} from 'firebase/auth';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import {
   CalendarDays,
@@ -64,6 +70,8 @@ export default function App() {
   const [managerCheckDone, setManagerCheckDone] = useState(false);
   const [authError, setAuthError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
 
   const [activeTab, setActiveTab] = useState<NavTab>('attendance');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -81,8 +89,8 @@ export default function App() {
 
   const isSuperAdmin = Boolean(
     user &&
-      user.emailVerified &&
-      user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
+    user.emailVerified &&
+    user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
   );
   const isManagerSignedIn = Boolean(user && isAuthorizedManager);
   const isManagerView = isManagerSignedIn && !previewAsEmployee;
@@ -100,26 +108,35 @@ export default function App() {
 
   useEffect(() => {
     if (!authReady) return;
+
     if (!user) {
       setIsAuthorizedManager(false);
       setManagerCheckDone(true);
+      setAuthError('');
       return;
     }
 
     setManagerCheckDone(false);
-    const unsub = subscribeIsManager(user.email, user.emailVerified, (ok) => {
-      setIsAuthorizedManager(ok);
-      setManagerCheckDone(true);
-      if (!ok && user.email) {
-        setAuthError(
-          `Tài khoản Google ${user.email} chưa nằm trong danh sách Quản lý Firestore.`,
-        );
-      } else {
-        setAuthError('');
-      }
-    });
+
+    const unsub = subscribeIsManager(
+      user.uid,
+      isSuperAdmin,
+      (ok) => {
+        setIsAuthorizedManager(ok);
+        setManagerCheckDone(true);
+
+        if (!ok) {
+          setAuthError(
+            'Tài khoản này chưa được cấp quyền Quản lý trong hệ thống.',
+          );
+        } else {
+          setAuthError('');
+        }
+      },
+    );
+
     return () => unsub();
-  }, [authReady, user]);
+  }, [authReady, user, isSuperAdmin]);
 
   useEffect(() => {
     if (!authReady || !managerCheckDone) return;
@@ -346,11 +363,65 @@ export default function App() {
     }
   };
 
+  const handleEmailPasswordSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+
+    const cleanUsername = loginUsername.trim().toLowerCase();
+
+    if (!/^[a-z0-9._]{4,30}$/.test(cleanUsername)) {
+      setAuthError(
+        'Username phải có 4–30 ký tự, chỉ gồm chữ thường, số, dấu chấm và dấu gạch dưới.',
+      );
+      return;
+    }
+
+    if (!loginPassword) {
+      setAuthError('Vui lòng nhập mật khẩu.');
+      return;
+    }
+
+    setSigningIn(true);
+
+    try {
+      const loginEmail = `${cleanUsername}@accounts.leave-management.invalid`;
+
+      await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
+
+      setLoginUsername('');
+      setLoginPassword('');
+      setPreviewAsEmployee(false);
+    } catch (err) {
+      const code =
+        typeof err === 'object' && err !== null && 'code' in err
+          ? String((err as { code?: unknown }).code)
+          : '';
+
+      if (
+        code === 'auth/invalid-credential' ||
+        code === 'auth/wrong-password' ||
+        code === 'auth/user-not-found'
+      ) {
+        setAuthError('Username hoặc mật khẩu không chính xác.');
+      } else if (code === 'auth/too-many-requests') {
+        setAuthError('Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau.');
+      } else {
+        setAuthError(
+          err instanceof Error
+            ? err.message
+            : 'Không thể đăng nhập. Vui lòng thử lại.',
+        );
+      }
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
   const handleSignOut = async () => {
     setAuthError('');
     setPreviewAsEmployee(false);
     if (user) {
-      await signOut(auth).catch(() => {});
+      await signOut(auth).catch(() => { });
     }
   };
 
@@ -369,19 +440,19 @@ export default function App() {
     badge?: number;
     managerOnly?: boolean;
   }> = [
-    { id: 'attendance', label: 'Hôm nay ai đi làm', icon: Smile },
-    { id: 'dashboard', label: 'Bảng thống kê', icon: LayoutDashboard, managerOnly: true },
-    { id: 'calendar', label: 'Lịch nghỉ tháng', icon: CalendarDays, managerOnly: true },
-    {
-      id: 'new-request',
-      label: 'Đăng ký & phân bổ nghỉ',
-      icon: FilePlus2,
-      managerOnly: true,
-    },
-    { id: 'employees', label: 'Quản lý nhân sự', icon: Users, managerOnly: true },
-    { id: 'history', label: 'Lịch sử nghỉ phép', icon: History, managerOnly: true },
-    { id: 'holidays', label: 'Ngày nghỉ công ty', icon: CalendarOff },
-  ];
+      { id: 'attendance', label: 'Hôm nay ai đi làm', icon: Smile },
+      { id: 'dashboard', label: 'Bảng thống kê', icon: LayoutDashboard, managerOnly: true },
+      { id: 'calendar', label: 'Lịch nghỉ tháng', icon: CalendarDays, managerOnly: true },
+      {
+        id: 'new-request',
+        label: 'Đăng ký & phân bổ nghỉ',
+        icon: FilePlus2,
+        managerOnly: true,
+      },
+      { id: 'employees', label: 'Quản lý nhân sự', icon: Users, managerOnly: true },
+      { id: 'history', label: 'Lịch sử nghỉ phép', icon: History, managerOnly: true },
+      { id: 'holidays', label: 'Ngày nghỉ công ty', icon: CalendarOff },
+    ];
 
   const visibleNavItems = navItems.filter((item) => !item.managerOnly || showManagerWorkspace);
 
@@ -432,11 +503,10 @@ export default function App() {
                 setActiveTab(item.id);
                 setMobileNavOpen(false);
               }}
-              className={`relative w-full flex items-center justify-between gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
-                active
-                  ? 'text-[#25576b]'
-                  : 'text-white/80 hover:bg-white/10 hover:text-white'
-              }`}
+              className={`relative w-full flex items-center justify-between gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${active
+                ? 'text-[#25576b]'
+                : 'text-white/80 hover:bg-white/10 hover:text-white'
+                }`}
             >
               {active && (
                 <motion.span
@@ -447,17 +517,15 @@ export default function App() {
               )}
               <span className="relative z-10 flex items-center gap-2.5 min-w-0">
                 <Icon
-                  className={`w-4 h-4 shrink-0 transition-transform duration-200 ${
-                    active ? 'text-[#25576b] scale-105' : 'text-white/65'
-                  }`}
+                  className={`w-4 h-4 shrink-0 transition-transform duration-200 ${active ? 'text-[#25576b] scale-105' : 'text-white/65'
+                    }`}
                 />
                 <span className="truncate">{item.label}</span>
               </span>
               {item.badge !== undefined && item.badge > 0 && (
                 <span
-                  className={`relative z-10 text-xs font-mono-num tabular-nums font-semibold ${
-                    active ? 'text-[#25576b]' : 'text-sky-100'
-                  }`}
+                  className={`relative z-10 text-xs font-mono-num tabular-nums font-semibold ${active ? 'text-[#25576b]' : 'text-sky-100'
+                    }`}
                 >
                   {item.badge}
                 </span>
@@ -485,11 +553,10 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setPreviewAsEmployee(false)}
-                  className={`relative py-1 text-xs font-medium rounded transition-colors ${
-                    !previewAsEmployee
-                      ? 'text-[#25576b]'
-                      : 'text-white/75 hover:text-white'
-                  }`}
+                  className={`relative py-1 text-xs font-medium rounded transition-colors ${!previewAsEmployee
+                    ? 'text-[#25576b]'
+                    : 'text-white/75 hover:text-white'
+                    }`}
                 >
                   {!previewAsEmployee && (
                     <motion.span
@@ -503,11 +570,10 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setPreviewAsEmployee(true)}
-                  className={`relative py-1 text-xs font-medium rounded transition-colors ${
-                    previewAsEmployee
-                      ? 'text-[#25576b]'
-                      : 'text-white/75 hover:text-white'
-                  }`}
+                  className={`relative py-1 text-xs font-medium rounded transition-colors ${previewAsEmployee
+                    ? 'text-[#25576b]'
+                    : 'text-white/75 hover:text-white'
+                    }`}
                 >
                   {previewAsEmployee && (
                     <motion.span
@@ -527,7 +593,7 @@ export default function App() {
                   {user?.displayName || 'Quản lý'}
                 </div>
                 <div className="text-[11px] text-white/75 truncate">
-                  {user?.email}
+                  {isSuperAdmin ? user?.email : 'Tài khoản Quản lý'}
                 </div>
               </div>
               <button
@@ -549,6 +615,7 @@ export default function App() {
               </p>
             </div>
 
+
             <button
               type="button"
               disabled={signingIn}
@@ -560,8 +627,47 @@ export default function App() {
                 ? 'Đang đăng nhập...'
                 : user && managerCheckDone
                   ? 'Đổi tài khoản Quản lý'
-                  : 'Đăng nhập Quản lý'}
+                  : 'Đăng nhập bằng Google'}
             </button>
+
+            {!isManagerSignedIn && (
+              <form
+                onSubmit={handleEmailPasswordSignIn}
+                className="mt-3 space-y-2"
+              >
+                <input
+                  type="text"
+                  value={loginUsername}
+                  onChange={(e) => setLoginUsername(e.target.value)}
+                  placeholder="Username quản lý"
+                  autoComplete="username"
+                  minLength={4}
+                  maxLength={30}
+                  required
+                  disabled={signingIn}
+                  className="w-full px-3 py-2 text-xs text-slate-800 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-60"
+                />
+
+                <input
+                  type="password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Mật khẩu"
+                  autoComplete="current-password"
+                  required
+                  disabled={signingIn}
+                  className="w-full px-3 py-2 text-xs text-slate-800 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-60"
+                />
+
+                <button
+                  type="submit"
+                  disabled={signingIn}
+                  className="w-full px-3 py-2 text-xs font-semibold text-white bg-[#25576b] hover:bg-[#1d4657] disabled:opacity-60 rounded-lg transition-colors"
+                >
+                  {signingIn ? 'Đang đăng nhập...' : 'Đăng nhập bằng Username'}
+                </button>
+              </form>
+            )}
 
             {user && managerCheckDone && (
               <button
@@ -570,9 +676,10 @@ export default function App() {
                 className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                Đăng xuất ({user.email})
+                Đăng xuất ({isSuperAdmin ? user.email : 'Quản lý'})
               </button>
             )}
+
           </div>
         )}
       </div>
@@ -692,98 +799,98 @@ export default function App() {
                 className="space-y-6"
               >
                 {isManagerView && activeTab === 'dashboard' && (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-white border border-slate-200 rounded-xl p-5">
-                  <div className="text-xs font-medium text-slate-500">Tổng nhân viên</div>
-                  <div className="text-2xl font-bold text-slate-900 font-mono-num tabular-nums mt-2">
-                    {kpis.totalEmployees}
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">Nhân sự · Quản lý</div>
-                </div>
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="bg-white border border-slate-200 rounded-xl p-5">
+                        <div className="text-xs font-medium text-slate-500">Tổng nhân viên</div>
+                        <div className="text-2xl font-bold text-slate-900 font-mono-num tabular-nums mt-2">
+                          {kpis.totalEmployees}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1">Nhân sự · Quản lý</div>
+                      </div>
 
-                <div className="bg-white border border-slate-200 rounded-xl p-5">
-                  <div className="text-xs font-medium text-slate-500">Đang nghỉ hôm nay</div>
-                  <div className="text-2xl font-bold text-teal-800 font-mono-num tabular-nums mt-2">
-                    {kpis.onLeaveToday}
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">Theo lịch nghỉ đã phân bổ</div>
-                </div>
+                      <div className="bg-white border border-slate-200 rounded-xl p-5">
+                        <div className="text-xs font-medium text-slate-500">Đang nghỉ hôm nay</div>
+                        <div className="text-2xl font-bold text-teal-800 font-mono-num tabular-nums mt-2">
+                          {kpis.onLeaveToday}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1">Theo lịch nghỉ đã phân bổ</div>
+                      </div>
 
-                <div className="bg-white border border-slate-200 rounded-xl p-5">
-                  <div className="text-xs font-medium text-slate-500">Đã ghi nhận tháng này</div>
-                  <div className="text-2xl font-bold text-emerald-700 font-mono-num tabular-nums mt-2">
-                    {kpis.approvedThisMonth}
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">Cập nhật tự động</div>
-                </div>
-              </div>
+                      <div className="bg-white border border-slate-200 rounded-xl p-5">
+                        <div className="text-xs font-medium text-slate-500">Đã ghi nhận tháng này</div>
+                        <div className="text-2xl font-bold text-emerald-700 font-mono-num tabular-nums mt-2">
+                          {kpis.approvedThisMonth}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1">Cập nhật tự động</div>
+                      </div>
+                    </div>
 
-              <LeaveStatsTable
-                stats={employeeStats}
-                isAdminView={isManagerView}
-                loading={dataLoading}
-                statsYear={statsYear}
-                availableYears={availableStatsYears}
-                onChangeYear={setStatsYear}
-                onNavigateEmployees={() => setActiveTab('employees')}
-              />
+                    <LeaveStatsTable
+                      stats={employeeStats}
+                      isAdminView={isManagerView}
+                      loading={dataLoading}
+                      statsYear={statsYear}
+                      availableYears={availableStatsYears}
+                      onChangeYear={setStatsYear}
+                      onNavigateEmployees={() => setActiveTab('employees')}
+                    />
 
-              <MonthlyCalendar requests={requests} holidays={holidays} />
-            </>
-          )}
+                    <MonthlyCalendar requests={requests} holidays={holidays} />
+                  </>
+                )}
 
-          {activeTab === 'attendance' && (
-            <AttendanceToday
-              employees={employees}
-              holidays={holidays}
-              dailyOffEmployeeIds={dailyOffEmployeeIds}
-              managerRequests={requests}
-              isManagerView={isManagerView}
-              loading={dataLoading}
-            />
-          )}
+                {activeTab === 'attendance' && (
+                  <AttendanceToday
+                    employees={employees}
+                    holidays={holidays}
+                    dailyOffEmployeeIds={dailyOffEmployeeIds}
+                    managerRequests={requests}
+                    isManagerView={isManagerView}
+                    loading={dataLoading}
+                  />
+                )}
 
-          {isManagerView && activeTab === 'calendar' && (
-            <MonthlyCalendar requests={requests} holidays={holidays} />
-          )}
+                {isManagerView && activeTab === 'calendar' && (
+                  <MonthlyCalendar requests={requests} holidays={holidays} />
+                )}
 
-          {isManagerView && activeTab === 'new-request' && user && (
-            <LeaveRequestForm
-              employeeStats={employeeStats}
-              holidays={holidays}
-              currentUserUid={user.uid}
-              adminLabel={user.displayName || user.email || 'Quản lý'}
-              onNavigateDashboard={() => setActiveTab('dashboard')}
-              onNavigateCalendar={() => setActiveTab('calendar')}
-            />
-          )}
+                {isManagerView && activeTab === 'new-request' && user && (
+                  <LeaveRequestForm
+                    employeeStats={employeeStats}
+                    holidays={holidays}
+                    currentUserUid={user.uid}
+                    adminLabel={user.displayName || user.email || 'Quản lý'}
+                    onNavigateDashboard={() => setActiveTab('dashboard')}
+                    onNavigateCalendar={() => setActiveTab('calendar')}
+                  />
+                )}
 
-          {activeTab === 'employees' && isManagerView && (
-            <EmployeeManager
-              employees={employeeStats}
-              managers={managers}
-              isSuperAdmin={isSuperAdmin}
-              currentAdminEmail={user?.email || ADMIN_EMAIL}
-            />
-          )}
+                {activeTab === 'employees' && isManagerView && (
+                  <EmployeeManager
+                    employees={employeeStats}
+                    managers={managers}
+                    isSuperAdmin={isSuperAdmin}
+                    currentAdminEmail={user?.email || ADMIN_EMAIL}
+                  />
+                )}
 
-          {activeTab === 'history' && isManagerView && (
-            <ApprovalHistory
-              requests={requests}
-              contacts={contacts}
-              adminLabel={user?.displayName || user?.email || 'Quản lý'}
-            />
-          )}
+                {activeTab === 'history' && isManagerView && (
+                  <ApprovalHistory
+                    requests={requests}
+                    contacts={contacts}
+                    adminLabel={user?.displayName || user?.email || 'Quản lý'}
+                  />
+                )}
 
-          {activeTab === 'holidays' && (
-            <HolidayManager
-              holidays={holidays}
-              employees={employees}
-              managerRequests={isManagerView ? requests : undefined}
-              isAdminView={isManagerView}
-            />
-          )}
+                {activeTab === 'holidays' && (
+                  <HolidayManager
+                    holidays={holidays}
+                    employees={employees}
+                    managerRequests={isManagerView ? requests : undefined}
+                    isAdminView={isManagerView}
+                  />
+                )}
               </motion.div>
             </AnimatePresence>
           </main>

@@ -1,9 +1,16 @@
-import { initializeApp } from 'firebase/app';
+import { getApps, initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
+
+const managerCreationApp =
+  getApps().find((existingApp) => existingApp.name === 'manager-account-creation')
+  ?? initializeApp(firebaseConfig, 'manager-account-creation');
+
+export const managerCreationAuth = getAuth(managerCreationApp);
+
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
