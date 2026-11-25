@@ -174,6 +174,13 @@
 - Cập nhật `[Content_Types].xml`, `workbook.xml`, `workbook.xml.rels` cho sheet4, và dòng "Sheet lịch" trong sheet Thông tin. Không đổi `firestore.rules`.
 - **Kiểm chứng:** file mẫu có 9 part ZIP, `testzip()` = None, mọi XML parse được; sheet4 đúng ô 02/11 (xanh lá, text nửa ngày) và 04/11 (hồng, "Lễ testing"). `npm run lint` + `npm run build` đạt; file test đã xoá.
 
+### 2.23 Tiếng báo đơn mới cho Quản lý
+
+- `src/utils/notificationSound.ts`: tổng hợp chuông hai nốt (880 Hz → 1174,66 Hz, mỗi nốt 0,2s) bằng **Web Audio API** ngay trên máy; không file âm, không endpoint mạng, không microphone/ghi âm. Cài đặt Bật/Tắt lưu ở `localStorage` key `lm_notification_sound_enabled` (mặc định bật).
+- `App.tsx`: gọi `playNewRequestSound()` trong callback `onAdded` của `subscribeLeaveRequests` (chỉ khi có đơn mới từ người khác, đang ở chế độ Quản lý — dùng `previewAsEmployeeRef` để bỏ qua chế độ xem thử Nhân viên). Đồng thời với toast 12 giây + badge chuông.
+- Autoplay policy: `unlockNotificationSound()` được gọi trong hai handler đăng nhập (Google / username-password) và ở listener `pointerdown`/`keydown` đầu tiên sau khi đã đăng nhập Quản lý. Nếu audio context vẫn `suspended` thì bỏ qua tiếng, không ảnh hưởng luồng dữ liệu.
+- UI: trong panel chuông thêm dòng **"Tiếng báo khi có đơn mới"** với nút **Đang bật / Đã tắt**; bật lại sẽ phát một tiếng thử ngay (user gesture). Cập nhật README mục thông báo + quyền riêng tư. Không đổi rules.
+
 ### 2.20 Giấy xác nhận y tế gọn còn một tick
 
 - Form nhân viên (`EmployeeLeaveRequestForm.tsx`) bỏ hoàn toàn ô **liên kết Google Drive** và kiểm tra `validateGoogleDriveUrl`; chỉ giữ checkbox **"Tôi đã có giấy xác nhận của bệnh viện / cơ sở y tế"**. Submit không còn ghi `attachmentUrl`.

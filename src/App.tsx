@@ -25,6 +25,8 @@ import {
   ShieldCheck,
   Smile,
   Users,
+  Volume2,
+  VolumeX,
   X,
 } from 'lucide-react';
 import { ADMIN_EMAIL, auth, googleProvider } from './firebase';
@@ -76,6 +78,12 @@ import { EmployeeLeaveRequestForm } from './components/EmployeeLeaveRequestForm'
 import { LeaveApprovalQueue } from './components/LeaveApprovalQueue';
 import { NotificationsPage } from './components/NotificationsPage';
 import { managerNameForUid } from './utils/managerUtils';
+import {
+  isNotificationSoundEnabled,
+  playNewRequestSound,
+  setNotificationSoundEnabled,
+  unlockNotificationSound,
+} from './utils/notificationSound';
 
 type NavTab =
   | 'attendance'
@@ -105,10 +113,12 @@ export default function App() {
   const [statsYear, setStatsYear] = useState<number>(() => new Date().getFullYear());
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [notifPanelOpen, setNotifPanelOpen] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(isNotificationSoundEnabled);
   const [newRequestToast, setNewRequestToast] = useState<LeaveRequestItem | null>(null);
   const [extraToastCount, setExtraToastCount] = useState(0);
   const notifPanelRef = useRef<HTMLDivElement>(null);
   const toastedRequestIdsRef = useRef<Set<string>>(new Set());
+  const previewAsEmployeeRef = useRef(previewAsEmployee);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [quotas, setQuotas] = useState<Record<string, EmployeeQuota>>({});
@@ -247,6 +257,7 @@ useEffect(() => {
         fromOthers.forEach((item) => toastedRequestIdsRef.current.add(item.id));
         setNewRequestToast(fromOthers[0]);
         setExtraToastCount(fromOthers.length - 1);
+        if (!previewAsEmployeeRef.current) playNewRequestSound();
       },
     );
     const unsubNotifs = subscribeNotifications(
@@ -316,10 +327,27 @@ useEffect(() => {
     return () => window.clearTimeout(timer);
   }, [newRequestToast]);
 
-  // Không hiện toast khi quản lý đang xem chế độ Nhân viên.
+  // Không hiện toast / không báo tiếng khi quản lý đang xem chế độ Nhân viên.
   useEffect(() => {
+    previewAsEmployeeRef.current = previewAsEmployee;
     if (previewAsEmployee) setNewRequestToast(null);
   }, [previewAsEmployee]);
+
+  // AudioContext chỉ chạy sau một tương tác của người dùng (chính sách autoplay).
+  useEffect(() => {
+    if (!isManagerSignedIn) return;
+    const unlock = () => {
+      unlockNotificationSound();
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, [isManagerSignedIn]);
 
   // Đóng panel thông báo khi bấm ra ngoài hoặc nhấn Escape.
   useEffect(() => {
@@ -478,6 +506,7 @@ useEffect(() => {
   }, [employees, requests, holidays]);
 
   const handleManagerSignIn = async () => {
+    unlockNotificationSound();
     setSigningIn(true);
     setAuthError('');
     try {
@@ -508,6 +537,7 @@ useEffect(() => {
 
   const handleEmailPasswordSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    unlockNotificationSound();
     setAuthError('');
 
     const cleanUsername = loginUsername.trim().toLowerCase();
@@ -994,6 +1024,34 @@ useEffect(() => {
                           >
                             <CheckCheck className="w-3.5 h-3.5" />
                             Đọc tất cả
+                          </button>
+                        </div>
+
+                        <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-slate-600 inline-flex items-center gap-1.5">
+                            {soundEnabled ? (
+                              <Volume2 className="w-3.5 h-3.5 text-teal-700" />
+                            ) : (
+                              <VolumeX className="w-3.5 h-3.5 text-slate-400" />
+                            )}
+                            Tiếng báo khi có đơn mới
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              unlockNotificationSound();
+                              const next = !soundEnabled;
+                              setSoundEnabled(next);
+                              setNotificationSoundEnabled(next);
+                              if (next) playNewRequestSound();
+                            }}
+                            className={`px-2.5 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+                              soundEnabled
+                                ? 'bg-teal-700 text-white border-teal-700'
+                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {soundEnabled ? 'Đang bật' : 'Đã tắt'}
                           </button>
                         </div>
 
