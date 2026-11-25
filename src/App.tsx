@@ -14,7 +14,6 @@ import {
   CalendarOff,
   CheckCheck,
   ClipboardCheck,
-  FilePlus2,
   History,
   Inbox,
   LayoutDashboard,
@@ -67,7 +66,6 @@ import {
 } from './utils/dateUtils';
 import { LeaveStatsTable } from './components/LeaveStatsTable';
 import { MonthlyCalendar } from './components/MonthlyCalendar';
-import { LeaveRequestForm } from './components/LeaveRequestForm';
 import { EmployeeManager } from './components/EmployeeManager';
 import { HolidayManager } from './components/HolidayManager';
 import { ApprovalHistory } from './components/ApprovalHistory';
@@ -82,7 +80,6 @@ type NavTab =
   | 'employee-request'
   | 'approvals'
   | 'notifications'
-  | 'new-request'
   | 'holidays'
   | 'dashboard'
   | 'calendar'
@@ -629,12 +626,6 @@ useEffect(() => {
         managerOnly: true,
         badge: unreadNotificationCount,
       },
-      {
-        id: 'new-request',
-        label: 'Phân bổ nghỉ cho nhân viên',
-        icon: FilePlus2,
-        managerOnly: true,
-      },
       { id: 'employees', label: 'Quản lý nhân sự', icon: Users, managerOnly: true },
       { id: 'history', label: 'Lịch sử nghỉ phép', icon: History, managerOnly: true },
       { id: 'holidays', label: 'Ngày nghỉ công ty', icon: CalendarOff },
@@ -649,7 +640,6 @@ useEffect(() => {
     approvals: 'Duyệt đơn nghỉ phép đang chờ',
     dashboard: 'Tổng quan & Bảng thống kê nghỉ phép',
     calendar: 'Lịch nghỉ tháng toàn công ty',
-    'new-request': 'Đăng ký & phân bổ ngày nghỉ cho nhân viên',
     employees: 'Quản lý nhân sự & tài khoản Quản lý',
     history: 'Lịch sử đăng ký & phân bổ nghỉ phép',
     holidays: 'Ngày nghỉ lễ & lịch OT công ty',
@@ -1054,25 +1044,6 @@ useEffect(() => {
                   </AnimatePresence>
                 </div>
 
-                {activeTab === 'new-request' ? (
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('dashboard')}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors whitespace-nowrap shrink-0"
-                  >
-                    <LayoutDashboard className="w-4 h-4" />
-                    Xem Bảng thống kê
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('new-request')}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors whitespace-nowrap shrink-0"
-                  >
-                    <FilePlus2 className="w-4 h-4" />
-                    Đăng ký &amp; phân bổ nghỉ
-                  </button>
-                )}
               </div>
             )}
           </header>
@@ -1194,17 +1165,6 @@ useEffect(() => {
 
                 {isManagerView && activeTab === 'calendar' && (
                   <MonthlyCalendar requests={requests} holidays={holidays} />
-                )}
-
-                {isManagerView && activeTab === 'new-request' && user && (
-                  <LeaveRequestForm
-                    employeeStats={employeeStats}
-                    holidays={holidays}
-                    currentUserUid={user.uid}
-                    adminLabel={currentManagerName}
-                    onNavigateDashboard={() => setActiveTab('dashboard')}
-                    onNavigateCalendar={() => setActiveTab('calendar')}
-                  />
                 )}
 
                 {activeTab === 'employees' && isManagerView && (

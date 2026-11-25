@@ -173,6 +173,12 @@
 - Xoá `src/utils/urlUtils.ts` (không còn nơi dùng). Giữ các trường `attachmentUrl` / `attachmentName` trong type + rules để đọc đơn cũ, nhưng giao diện không hiển thị.
 - Cập nhật README (tính năng, giới hạn, quyền riêng tư). Không đổi `firestore.rules`, không cần deploy rules.
 
+### 2.21 Bỏ mục tự đăng ký nghỉ của Quản lý
+
+- Theo yêu cầu "Admin không cần đăng ký nghỉ phép, chỉ cần cho nhân viên": xoá tab/đường dẫn `new-request` ("Phân bổ nghỉ cho nhân viên") và nút **Đăng ký &amp; phân bổ nghỉ** trên header của `App.tsx`, cùng mục tương ứng trong `NavTab` và `pageTitleMap`.
+- Xoá component `src/components/LeaveRequestForm.tsx` và hàm `createManagerAllocatedLeaveRequest` trong `firestoreService.ts` (không còn nơi gọi). Quản lý giờ chỉ có luồng: nhân viên gửi đơn → **Duyệt đơn chờ** → phân bổ loại phép/nửa ngày → duyệt.
+- Giữ nguyên rules (Quản lý vẫn có quyền tạo đơn qua API nếu cần sau này), nhưng giao diện không còn tính năng này. Cập nhật README phần dành cho Quản lý.
+
 ---
 
 ## 3. Cấu trúc Firestore & Bảo mật (`firestore.rules`)

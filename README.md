@@ -33,7 +33,7 @@
 
 - **Duyệt đơn chờ**: hàng đợi đơn nhân viên tự gửi, sửa phân bổ (tổng phải bằng số ngày làm việc, bước 0,5 ngày), đổi buổi nghỉ nửa ngày (Sáng/Chiều), duyệt hoặc từ chối kèm lý do bắt buộc, đánh dấu đã có giấy xác nhận nghỉ ốm.
 - **Thông báo trong app**: chuông ở góc phải header với số chưa đọc, danh sách thông báo, đánh dấu đã đọc / đọc tất cả. Khi đang mở app mà có đơn mới, hiện **toast** góc dưới phải kèm nút “Xem đơn”. Ngoài ra có hẳn tab **Thông báo** trong menu quản lý: lọc Tất cả / Chưa đọc, tìm theo tên hoặc nội dung, xem trạng thái hiện tại của đơn liên quan.
-- **Phân bổ nghỉ cho nhân viên**: quản lý tạo đơn trực tiếp (trừ quỹ phép ngay).
+- **Không đăng ký nghỉ cho chính mình**: Quản lý không có mục tự đăng ký; mọi đơn nghỉ đều do nhân viên gửi ở form "Đăng ký nghỉ phép", rồi Quản lý duyệt/phân bổ tại **Duyệt đơn chờ**.
 - **Bảng thống kê**, **Lịch nghỉ tháng**, **Quản lý nhân sự**, **Lịch sử nghỉ phép**, **Ngày nghỉ công ty**.
 - **Xuất Excel theo tháng**: trong **Lịch nghỉ tháng**, bấm **"Xuất Excel tháng này"** để tải file `NghiPhep_YYYY-MM.xlsx` phục vụ lưu trữ/đối chiếu. File có 3 sheet: **Chi tiết ngày nghỉ** (mỗi ngày làm việc một dòng: ngày, thứ, nhân viên, phòng ban, buổi nghỉ, số ngày, loại phép phân bổ, lý do, bàn giao, mã đơn, người duyệt, thời điểm duyệt), **Tổng hợp theo nhân viên** (số ngày từng loại phép) và **Thông tin** (tháng, giờ làm việc, nguồn dữ liệu, thời điểm xuất). Chỉ gồm đơn **đã duyệt** có ngày làm việc trong tháng đang xem.
 
