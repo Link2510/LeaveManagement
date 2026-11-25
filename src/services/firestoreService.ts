@@ -1354,8 +1354,11 @@ export function subscribeLeaveSummaries(
   onData: (summaries: Record<string, LeaveSummary>) => void,
 ): Unsubscribe {
   const path = 'leaveSummaries';
+  // firestore.rules require year >= 2020 for list queries; an unfiltered
+  // collection snapshot is rejected with PERMISSION_DENIED.
+  const q = query(collection(db, path), where('year', '>=', 2020));
   return onSnapshot(
-    collection(db, path),
+    q,
     (snapshot) => {
       const map: Record<string, LeaveSummary> = {};
       for (const item of snapshot.docs) {
@@ -1378,7 +1381,13 @@ export function subscribeLeaveSummaries(
       }
       onData(map);
     },
-    () => onData({}),
+    (error) => {
+      console.warn(
+        '[leaveSummaries] Không đọc được quỹ phép:',
+        error instanceof Error ? error.message : error,
+      );
+      onData({});
+    },
   );
 }
 
@@ -1419,7 +1428,9 @@ export async function syncLeaveSummaries(
   }
 
   try {
-    const snapshot = await getDocs(collection(db, 'leaveSummaries'));
+    const snapshot = await getDocs(
+      query(collection(db, 'leaveSummaries'), where('year', '>=', 2020)),
+    );
     const ops: Array<
       | { type: 'set'; summary: LeaveSummary }
       | { type: 'delete'; employeeId: string }
@@ -1472,8 +1483,12 @@ export async function syncLeaveSummaries(
       }
       await batch.commit();
     }
-  } catch {
+  } catch (error) {
     // Non-blocking background sync when manager updates leave data
+    console.warn(
+      '[leaveSummaries] Không đồng bộ được quỹ phép:',
+      error instanceof Error ? error.message : error,
+    );
   }
 }
 

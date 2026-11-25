@@ -143,6 +143,12 @@
 - **Dashboard:** ba thẻ KPI (tổng nhân viên, đang nghỉ hôm nay, đã ghi nhận tháng này) → **Lịch nghỉ tháng full chiều rộng** ngay dưới → bảng thống kê. Panel "Chi tiết ngày chọn" chuyển xuống dưới lịch thay vì cột phải.
 - **Kiểm thử:** `npm run lint` và `npm run build` đều đạt; cần deploy `firestore.rules` mới (thêm `/leaveSummaries`, bỏ lookup) trước khi dùng tính năng quỹ phép trên production.
 
+### 2.17 Sửa lỗi "Chưa có dữ liệu quỹ phép" trên thẻ đồng nghiệp
+
+- **Nguyên nhân:** rules có `allow list: if resource.data.year >= 2020` cho `/leaveSummaries`, nhưng `subscribeLeaveSummaries` và `syncLeaveSummaries` lại gọi truy vấn **không có điều kiện** `collection(...)`. Theo nguyên tắc "rules are not filters", Firestore từ chối toàn bộ truy vấn (PERMISSION_DENIED); hàm đồng bộ nuốt lỗi nên không bao giờ ghi document nào, còn popup nhân viên luôn nhận `{}`.
+- **Cách sửa:** thêm `where('year', '>=', 2020)` vào cả `onSnapshot` lẫn `getDocs` của `/leaveSummaries` (giống cách `subscribeHolidays` đã làm). Đồng thời `console.warn` để lỗi truy vấn/quỹ phép không còn bị im lặng khi chẩn đoán.
+- **Sau khi cập nhật:** chỉ cần Quản lý mở app một lần (để `syncLeaveSummaries` chạy), các thẻ quỹ phép sẽ có số liệu realtime cho mọi nhân viên.
+
 ---
 
 ## 3. Cấu trúc Firestore & Bảo mật (`firestore.rules`)
