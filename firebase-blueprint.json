@@ -264,6 +264,29 @@
         "updatedAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "halfDay": {
+          "type": "object",
+          "description": "Optional half-day leave on the first working day of the range; session follows company hours 08:15-12:15 / 13:30-17:30.",
+          "properties": {
+            "date": {
+              "type": "string",
+              "minLength": 10,
+              "maxLength": 10,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "session": {
+              "type": "string",
+              "enum": [
+                "Sáng",
+                "Chiều"
+              ]
+            }
+          },
+          "required": [
+            "date",
+            "session"
+          ]
         }
       },
       "required": [
@@ -383,7 +406,7 @@
     },
     "DailyOffStatus": {
       "title": "DailyOffStatus",
-      "description": "Non-PII daily index of employee IDs on approved leave for a single date so the attendance board and company holiday calendar show absent employees without exposing leave records.",
+      "description": "Non-PII daily index of employee IDs on full-day leave and half-day sessions for a single date, so the attendance board can show the working session without exposing leave records.",
       "type": "object",
       "properties": {
         "date": {
@@ -398,6 +421,31 @@
         "updatedAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "halfDayOff": {
+          "type": "array",
+          "description": "Employee IDs taking only one half of the working day.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "employeeId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "session": {
+                "type": "string",
+                "enum": [
+                  "Sáng",
+                  "Chiều"
+                ]
+              }
+            },
+            "required": [
+              "employeeId",
+              "session"
+            ]
+          }
         }
       },
       "required": [
@@ -513,7 +561,7 @@
       "schema": {
         "$ref": "#/entities/DailyOffStatus"
       },
-      "description": "Non-PII daily absent employee ID list for the working-today board and company holiday calendar day-detail view."
+      "description": "Non-PII daily absent employee IDs and half-day sessions for the working-today board and company holiday calendar."
     },
     "/monthlyOffStatus/{monthKey}": {
       "schema": {

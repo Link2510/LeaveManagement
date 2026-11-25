@@ -21,6 +21,21 @@ export interface LeaveAllocation {
   days: number;
 }
 
+/** Buổi nghỉ nửa ngày, theo giờ làm việc của công ty. */
+export type HalfDaySession = 'Sáng' | 'Chiều';
+
+export interface HalfDayInfo {
+  /** Ngày làm việc đầu tiên trong khoảng nghỉ được tính nửa ngày. */
+  date: string;
+  session: HalfDaySession;
+}
+
+/** Dữ liệu điểm danh nửa ngày (không có lý do hay thông tin cá nhân). */
+export interface HalfDayOffEntry {
+  employeeId: string;
+  session: HalfDaySession;
+}
+
 export interface Employee {
   id: string;
   name: string;
@@ -83,6 +98,8 @@ export interface LeaveRequestItem {
   note: string;
   status: LeaveStatus;
   allocations: LeaveAllocation[];
+  /** Nếu có: ngày làm việc đầu tiên trong khoảng chỉ nghỉ nửa buổi. */
+  halfDay?: HalfDayInfo;
   hasHospitalCert: boolean;
   hospitalCertPending?: boolean;
   attachmentName: string;

@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import type {
+  HalfDaySession,
   LeaveAllocation,
   LeaveRequestContact,
   LeaveRequestItem,
@@ -23,7 +24,11 @@ import {
   approveLeaveRequest,
   rejectLeaveRequest,
 } from '../services/firestoreService';
-import { formatDateTimeVN, formatDateVN } from '../utils/dateUtils';
+import {
+  formatDateTimeVN,
+  formatDateVN,
+  getHalfDayTimeLabel,
+} from '../utils/dateUtils';
 import { getSafeGoogleDriveHref } from '../utils/urlUtils';
 import { StatusLabel } from './StatusBadge';
 
@@ -156,6 +161,9 @@ function PendingRequestCard({
   );
   const [rejecting, setRejecting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [halfSession, setHalfSession] = useState<HalfDaySession>(
+    request.halfDay?.session || 'Sáng',
+  );
   const [busy, setBusy] = useState<'approve' | 'reject' | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -188,6 +196,9 @@ function PendingRequestCard({
         isSick ? hasHospitalCert : false,
         adminLabel,
         isSick && !hasHospitalCert,
+        request.halfDay
+          ? { date: request.halfDay.date, session: halfSession }
+          : undefined,
       );
     } catch (err) {
       setErrorMsg(
@@ -272,6 +283,35 @@ function PendingRequestCard({
             </div>
           </div>
         </div>
+
+        {request.halfDay && (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-900 space-y-2">
+            <div className="font-medium">
+              Nghỉ nửa ngày vào {formatDateVN(request.halfDay.date)} — tổng{' '}
+              {request.workingDays} ngày
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(['Sáng', 'Chiều'] as const).map((session) => (
+                <button
+                  key={session}
+                  type="button"
+                  onClick={() => setHalfSession(session)}
+                  className={`px-2.5 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+                    halfSession === session
+                      ? 'bg-amber-700 text-white border-amber-700'
+                      : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100'
+                  }`}
+                >
+                  {getHalfDayTimeLabel(session)}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-amber-800">
+              Điểm danh sẽ ghi nhận nhân sự làm việc buổi còn lại (08:15–12:15 / 13:30–17:30,
+              nghỉ trưa 12:15–13:30).
+            </p>
+          </div>
+        )}
 
         <div className="text-xs text-slate-700 space-y-1">
           <div>

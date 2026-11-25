@@ -4,11 +4,13 @@ import type {
   CompanyHoliday,
   Department,
   Employee,
+  HalfDayOffEntry,
   LeaveRequestItem,
   LeaveSummary,
 } from '../types/leave';
 import {
   formatDateVN,
+  getHalfDayTimeLabel,
   getTodayKey,
   getWeekdayLabelVN,
   isDateInRange,
@@ -20,6 +22,7 @@ interface AttendanceTodayProps {
   employees: Employee[];
   holidays: CompanyHoliday[];
   dailyOffEmployeeIds: string[];
+  halfDayOff?: HalfDayOffEntry[];
   managerRequests?: LeaveRequestItem[];
   isManagerView: boolean;
   loading: boolean;
@@ -31,6 +34,7 @@ export function AttendanceToday({
   employees,
   holidays,
   dailyOffEmployeeIds,
+  halfDayOff = [],
   managerRequests = [],
   isManagerView,
   loading,
@@ -68,18 +72,48 @@ export function AttendanceToday({
     [todayKey],
   );
 
+  const halfByEmployee = useMemo(() => {
+    const map = new Map<string, HalfDayOffEntry['session']>();
+    for (const item of halfDayOff) {
+      map.set(item.employeeId, item.session);
+    }
+    if (isManagerView) {
+      for (const req of managerRequests) {
+        if (
+          req.status === 'Đã duyệt' &&
+          req.halfDay?.date === todayKey &&
+          (req.halfDay.session === 'Sáng' || req.halfDay.session === 'Chiều')
+        ) {
+          map.set(req.employeeId, req.halfDay.session);
+        }
+      }
+    }
+    return map;
+  }, [halfDayOff, isManagerView, managerRequests, todayKey]);
+
   const offIdSet = useMemo(() => {
     const set = new Set<string>(dailyOffEmployeeIds);
     if (isManagerView) {
       for (const req of managerRequests) {
-        if (req.status === 'Đã duyệt' && isDateInRange(todayKey, req.startDate, req.endDate)) {
+        if (
+          req.status === 'Đã duyệt' &&
+          isDateInRange(todayKey, req.startDate, req.endDate) &&
+          req.halfDay?.date !== todayKey
+        ) {
           set.add(req.employeeId);
         }
       }
     }
+    // Nghỉ nửa buổi vẫn là đi làm trong buổi còn lại.
+    for (const empId of halfByEmployee.keys()) set.delete(empId);
     return set;
-  }, [dailyOffEmployeeIds, isManagerView, managerRequests, todayKey]);
-  
+  }, [dailyOffEmployeeIds, halfByEmployee, isManagerView, managerRequests, todayKey]);
+
+  const halfDayCount = useMemo(
+    () => employees.filter((emp) => halfByEmployee.has(emp.id)).length,
+    [employees, halfByEmployee],
+  );
+
 
   const workingEmployees = useMemo(() => {
     if (!todayWorking) return [];
@@ -130,6 +164,14 @@ export function AttendanceToday({
                   {' · '}
                   <span className="font-mono-num tabular-nums">
                     {offTodayCount} nhân sự nghỉ phép đã duyệt
+                  </span>
+                </>
+              )}
+              {todayWorking && halfDayCount > 0 && (
+                <>
+                  {' · '}
+                  <span className="font-mono-num tabular-nums text-amber-700">
+                    {halfDayCount} nhân sự nghỉ nửa ngày
                   </span>
                 </>
               )}
@@ -231,11 +273,19 @@ export function AttendanceToday({
                   {emp.name}
                 </div>
                 <div className="text-xs text-slate-500 mt-0.5">{emp.department}</div>
-                <div className="mt-2 text-[11px] font-medium text-emerald-700">
-                  Đang làm việc
+                <div
+                  className={`mt-2 text-[11px] font-medium ${
+                    halfByEmployee.has(emp.id) ? 'text-amber-700' : 'text-emerald-700'
+                  }`}
+                >
+                  {halfByEmployee.has(emp.id)
+                    ? `Nghỉ: ${getHalfDayTimeLabel(halfByEmployee.get(emp.id) || 'Sáng')}`
+                    : 'Đang làm việc'}
                 </div>
                 <div className="text-[10px] text-slate-400 mt-0.5">
-                  Bấm để xem quỹ phép
+                  {halfByEmployee.has(emp.id)
+                    ? 'Làm việc buổi còn lại · Bấm xem quỹ phép'
+                    : 'Bấm để xem quỹ phép'}
                 </div>
               </div>
             </button>

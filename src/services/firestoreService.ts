@@ -36,6 +36,9 @@ import {
   type Department,
   type Employee,
   type EmployeeQuota,
+  type HalfDayInfo,
+  type HalfDayOffEntry,
+  type HalfDaySession,
   type HolidayCategory,
   type LeaveAllocation,
   type LeaveRequestContact,
@@ -64,6 +67,20 @@ function timestampToMs(val: unknown): number {
     if (typeof sec === 'number') return sec * 1000;
   }
   return Date.now();
+}
+
+function parseHalfDay(value: unknown): HalfDayInfo | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const date = String((value as { date?: unknown }).date || '');
+  const session = (value as { session?: unknown }).session;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return undefined;
+  if (session !== 'Sáng' && session !== 'Chiều') return undefined;
+  return { date, session };
+}
+
+function cleanHalfDay(value: HalfDayInfo | undefined): HalfDayInfo | undefined {
+  const parsed = parseHalfDay(value);
+  return parsed ? { date: parsed.date, session: parsed.session } : undefined;
 }
 
 
@@ -569,6 +586,7 @@ function mapRequestDoc(id: string, data: Record<string, unknown>): LeaveRequestI
           days: Number(a.days || 0),
         }))
       : [],
+    halfDay: parseHalfDay(data.halfDay),
     hasHospitalCert: Boolean(data.hasHospitalCert),
     hospitalCertPending: Boolean(data.hospitalCertPending),
     attachmentName: String(data.attachmentName || ''),
@@ -680,6 +698,7 @@ export async function createManagerAllocatedLeaveRequest(input: {
   reason: string;
   note: string;
   allocations: LeaveAllocation[];
+  halfDay?: HalfDayInfo;
   hasHospitalCert: boolean;
   hospitalCertPending?: boolean;
   attachmentName: string;
@@ -712,6 +731,7 @@ export async function createManagerAllocatedLeaveRequest(input: {
       note: clampString(input.note || '', 500),
       status: input.status,
       allocations: sanitizedAllocations,
+      ...(cleanHalfDay(input.halfDay) ? { halfDay: cleanHalfDay(input.halfDay) } : {}),
       hasHospitalCert: Boolean(input.hasHospitalCert),
       hospitalCertPending: Boolean(input.hospitalCertPending),
       attachmentName: clampString(input.attachmentName || '', 180),
@@ -752,6 +772,7 @@ export interface EmployeeLeaveSubmissionInput {
   startDate: string;
   endDate: string;
   workingDays: number;
+  halfDay?: HalfDayInfo;
   reason: string;
   note: string;
   hasHospitalCert: boolean;
@@ -819,6 +840,7 @@ export async function submitEmployeeLeaveRequest(
       note: cleanNote,
       status: 'Đang chờ duyệt',
       allocations: [],
+      ...(cleanHalfDay(input.halfDay) ? { halfDay: cleanHalfDay(input.halfDay) } : {}),
       hasHospitalCert,
       hospitalCertPending: false,
       attachmentName: '',
@@ -900,6 +922,7 @@ export async function approveLeaveRequest(
   hasHospitalCert: boolean,
   managerLabel: string,
   hospitalCertPending = false,
+  halfDay?: HalfDayInfo,
 ): Promise<void> {
   const notifId = generateSafeId('notif');
   const nowIso = new Date().toISOString();
@@ -916,6 +939,9 @@ export async function approveLeaveRequest(
     batch.update(doc(db, 'leaveRequests', request.id), {
       status: 'Đã duyệt',
       allocations: cleanAllocations,
+      ...(cleanHalfDay(halfDay ?? request.halfDay)
+        ? { halfDay: cleanHalfDay(halfDay ?? request.halfDay) }
+        : {}),
       hasHospitalCert: Boolean(hasHospitalCert),
       hospitalCertPending: Boolean(hospitalCertPending),
       processedBy: cleanManager,
@@ -1058,11 +1084,11 @@ export async function markAllNotificationsRead(notifications: AppNotification[])
 
 export function subscribeDailyOffStatus(
   dateKey: string,
-  onData: (offEmployeeIds: string[]) => void,
+  onData: (offEmployeeIds: string[], halfDayOff: HalfDayOffEntry[]) => void,
   onReady?: () => void,
 ): Unsubscribe {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
-    onData([]);
+    onData([], []);
     onReady?.();
     return () => {};
   }
@@ -1071,7 +1097,7 @@ export function subscribeDailyOffStatus(
     doc(db, 'dailyOffStatus', dateKey),
     (snap) => {
       if (!snap.exists()) {
-        onData([]);
+        onData([], []);
         onReady?.();
         return;
       }
@@ -1080,11 +1106,23 @@ export function subscribeDailyOffStatus(
       const cleanIds = rawIds
         .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
         .slice(0, 100);
-      onData(cleanIds);
+      const rawHalf = Array.isArray(data.halfDayOff) ? data.halfDayOff : [];
+      const cleanHalf: HalfDayOffEntry[] = [];
+      for (const item of rawHalf) {
+        const parsed = parseHalfDay(item);
+        const employeeId =
+          typeof (item as { employeeId?: unknown })?.employeeId === 'string'
+            ? String((item as { employeeId: string }).employeeId).trim()
+            : '';
+        if (parsed && employeeId) {
+          cleanHalf.push({ employeeId, session: parsed.session });
+        }
+      }
+      onData(cleanIds, cleanHalf.slice(0, 100));
       onReady?.();
     },
     () => {
-      onData([]);
+      onData([], []);
       onReady?.();
     },
   );
@@ -1093,6 +1131,7 @@ export function subscribeDailyOffStatus(
 export async function syncDailyOffStatusForDate(
   dateKey: string,
   offEmployeeIds: string[],
+  halfDayOff: HalfDayOffEntry[] = [],
 ): Promise<void> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
   const cleanIds = Array.from(
@@ -1105,10 +1144,23 @@ export async function syncDailyOffStatusForDate(
     .sort()
     .slice(0, 100);
 
+  const cleanHalf = halfDayOff
+    .filter(
+      (item) =>
+        typeof item.employeeId === 'string' &&
+        item.employeeId.trim().length > 0 &&
+        item.employeeId.length <= 128 &&
+        (item.session === 'Sáng' || item.session === 'Chiều') &&
+        !cleanIds.includes(item.employeeId),
+    )
+    .slice(0, 100)
+    .map((item) => ({ employeeId: item.employeeId.trim(), session: item.session }));
+
   try {
     await setDoc(doc(db, 'dailyOffStatus', dateKey), {
       date: dateKey,
       offEmployeeIds: cleanIds,
+      halfDayOff: cleanHalf,
       updatedAt: serverTimestamp(),
     });
   } catch {
@@ -1184,6 +1236,7 @@ export async function syncAllDailyOffStatuses(
 
   const desiredByDate = new Map<string, Set<string>>();
   desiredByDate.set(todayKey, new Set<string>());
+  const desiredHalfByDate = new Map<string, Map<string, HalfDaySession>>();
 
   const desiredByMonth = new Map<string, Map<string, Set<string>>>();
   desiredByMonth.set(todayMonthKey, new Map<string, Set<string>>());
@@ -1203,12 +1256,22 @@ export async function syncAllDailyOffStatuses(
       safety += 1;
       const dateKey = toDateKey(cursor);
       if (isWorkingDay(dateKey, holidayMap)) {
-        let daySet = desiredByDate.get(dateKey);
-        if (!daySet) {
-          daySet = new Set<string>();
-          desiredByDate.set(dateKey, daySet);
+        if (!desiredByDate.has(dateKey)) desiredByDate.set(dateKey, new Set<string>());
+        if (req.halfDay?.date === dateKey && (req.halfDay.session === 'Sáng' || req.halfDay.session === 'Chiều')) {
+          let halfMap = desiredHalfByDate.get(dateKey);
+          if (!halfMap) {
+            halfMap = new Map<string, HalfDaySession>();
+            desiredHalfByDate.set(dateKey, halfMap);
+          }
+          halfMap.set(empId, req.halfDay.session);
+        } else {
+          let daySet = desiredByDate.get(dateKey);
+          if (!daySet) {
+            daySet = new Set<string>();
+            desiredByDate.set(dateKey, daySet);
+          }
+          daySet.add(empId);
         }
-        daySet.add(empId);
 
         const monthKey = dateKey.slice(0, 7);
         let monthMap = desiredByMonth.get(monthKey);
@@ -1227,13 +1290,22 @@ export async function syncAllDailyOffStatuses(
     }
   }
 
+  // Nếu nhân viên có đơn nghỉ cả ngày trong cùng ngày, đơn nửa ngày không còn ý nghĩa.
+  for (const [dateKey, halfMap] of desiredHalfByDate.entries()) {
+    const fullIds = desiredByDate.get(dateKey);
+    if (fullIds) {
+      for (const empId of fullIds) halfMap.delete(empId);
+    }
+    if (halfMap.size === 0) desiredHalfByDate.delete(dateKey);
+  }
+
   try {
     const [existingDailySnap, existingMonthlySnap] = await Promise.all([
       getDocs(collection(db, 'dailyOffStatus')),
       getDocs(collection(db, 'monthlyOffStatus')),
     ]);
 
-    const existingByDate = new Map<string, string[]>();
+    const existingByDate = new Map<string, { ids: string[]; halfJson: string }>();
     for (const d of existingDailySnap.docs) {
       const data = d.data();
       const rawIds = Array.isArray(data.offEmployeeIds) ? data.offEmployeeIds : [];
@@ -1241,7 +1313,19 @@ export async function syncAllDailyOffStatuses(
         .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
         .sort()
         .slice(0, 100);
-      existingByDate.set(d.id, cleanIds);
+      const halfEntries: HalfDayOffEntry[] = [];
+      if (Array.isArray(data.halfDayOff)) {
+        for (const item of data.halfDayOff) {
+          const parsed = parseHalfDay(item);
+          const empId =
+            typeof (item as { employeeId?: unknown })?.employeeId === 'string'
+              ? String((item as { employeeId: string }).employeeId).trim()
+              : '';
+          if (parsed && empId) halfEntries.push({ employeeId: empId, session: parsed.session });
+        }
+      }
+      halfEntries.sort((a, b) => a.employeeId.localeCompare(b.employeeId));
+      existingByDate.set(d.id, { ids: cleanIds, halfJson: JSON.stringify(halfEntries.slice(0, 100)) });
     }
 
     const existingByMonth = new Map<string, string>();
@@ -1262,7 +1346,7 @@ export async function syncAllDailyOffStatuses(
     }
 
     const ops: Array<
-      | { type: 'setDaily'; dateKey: string; ids: string[] }
+      | { type: 'setDaily'; dateKey: string; ids: string[]; half: HalfDayOffEntry[] }
       | { type: 'deleteDaily'; dateKey: string }
       | { type: 'setMonthly'; monthKey: string; entries: MonthlyOffEntry[] }
       | { type: 'deleteMonthly'; monthKey: string }
@@ -1270,21 +1354,29 @@ export async function syncAllDailyOffStatuses(
 
     for (const [dateKey, idSet] of desiredByDate.entries()) {
       const desiredIds = Array.from(idSet).sort().slice(0, 100);
-      const existingIds = existingByDate.get(dateKey);
+      const desiredHalf: HalfDayOffEntry[] = Array.from(
+        desiredHalfByDate.get(dateKey)?.entries() || [],
+      )
+        .map(([employeeId, session]) => ({ employeeId, session }))
+        .sort((a, b) => a.employeeId.localeCompare(b.employeeId))
+        .slice(0, 100);
+      const desiredHalfJson = JSON.stringify(desiredHalf);
+      const existing = existingByDate.get(dateKey);
       const same =
-        existingIds !== undefined &&
-        existingIds.length === desiredIds.length &&
-        existingIds.every((id, idx) => id === desiredIds[idx]);
+        existing !== undefined &&
+        existing.ids.length === desiredIds.length &&
+        existing.ids.every((id, idx) => id === desiredIds[idx]) &&
+        existing.halfJson === desiredHalfJson;
 
       if (!same) {
-        ops.push({ type: 'setDaily', dateKey, ids: desiredIds });
+        ops.push({ type: 'setDaily', dateKey, ids: desiredIds, half: desiredHalf });
       }
     }
 
     for (const dateKey of existingByDate.keys()) {
       if (!desiredByDate.has(dateKey)) {
         if (dateKey === todayKey) {
-          ops.push({ type: 'setDaily', dateKey, ids: [] });
+          ops.push({ type: 'setDaily', dateKey, ids: [], half: [] });
         } else {
           ops.push({ type: 'deleteDaily', dateKey });
         }
@@ -1325,6 +1417,7 @@ export async function syncAllDailyOffStatuses(
           batch.set(doc(db, 'dailyOffStatus', op.dateKey), {
             date: op.dateKey,
             offEmployeeIds: op.ids,
+            halfDayOff: op.half,
             updatedAt: serverTimestamp(),
           });
         } else if (op.type === 'deleteDaily') {

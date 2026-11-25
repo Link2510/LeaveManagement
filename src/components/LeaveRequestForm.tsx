@@ -10,12 +10,20 @@ import {
 import type {
   CompanyHoliday,
   EmployeeStats,
+  HalfDaySession,
   LeaveAllocation,
   LeaveType,
 } from '../types/leave';
 import { ALL_LEAVE_TYPES } from '../types/leave';
 import { createManagerAllocatedLeaveRequest } from '../services/firestoreService';
-import { calculateWorkingDays, formatDateVN, getTodayKey } from '../utils/dateUtils';
+import {
+  applyHalfDayToWorkingDays,
+  calculateWorkingDays,
+  formatDateVN,
+  getFirstWorkingDate,
+  getHalfDayTimeLabel,
+  getTodayKey,
+} from '../utils/dateUtils';
 import { VietnameseDatePicker } from './VietnameseDatePicker';
 
 interface LeaveRequestFormProps {
@@ -72,6 +80,8 @@ export function LeaveRequestForm({
   const [endDate, setEndDate] = useState<string>(today);
   const [reason, setReason] = useState<string>('');
   const [note, setNote] = useState<string>('');
+  const [halfDayEnabled, setHalfDayEnabled] = useState(false);
+  const [halfDaySession, setHalfDaySession] = useState<HalfDaySession>('Sáng');
 
   const [allocMap, setAllocMap] = useState<Record<LeaveType, number>>(() => ({
     ...createEmptyAllocMap(),
@@ -93,10 +103,16 @@ export function LeaveRequestForm({
     [employeeStats, employeeId],
   );
 
-  const { workingDays, weekendDaysExcluded, excludedHolidays, makeupWorkdays } = useMemo(
+  const fullWorkingDays = useMemo(
     () => calculateWorkingDays(startDate, endDate, holidays),
     [startDate, endDate, holidays],
   );
+  const workingDays = applyHalfDayToWorkingDays(fullWorkingDays.workingDays, halfDayEnabled);
+  const halfDayDate = useMemo(
+    () => getFirstWorkingDate(startDate, endDate, holidays),
+    [startDate, endDate, holidays],
+  );
+  const { weekendDaysExcluded, excludedHolidays, makeupWorkdays } = fullWorkingDays;
 
   useEffect(() => {
     if (hasManualSplit) return;
@@ -223,6 +239,10 @@ export function LeaveRequestForm({
         startDate,
         endDate,
         workingDays,
+        halfDay:
+          halfDayEnabled && halfDayDate
+            ? { date: halfDayDate, session: halfDaySession }
+            : undefined,
         reason: reason.trim(),
         note: note.trim(),
         allocations: activeAllocations,
@@ -246,6 +266,8 @@ export function LeaveRequestForm({
       setNote('');
       setHasHospitalCert(false);
       setHasManualSplit(false);
+      setHalfDayEnabled(false);
+      setHalfDaySession('Sáng');
       setAllocMap({
         ...createEmptyAllocMap(),
         'Phép năm': workingDays,
@@ -429,6 +451,56 @@ export function LeaveRequestForm({
                 <div className="text-amber-700 font-medium">
                   Khoảng ngày này rơi vào Thứ 7 / Chủ nhật hoặc ngày nghỉ công ty (không phải ngày OT), nên số ngày làm việc = 0.
                 </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 rounded-lg bg-amber-50/70 border border-amber-200 space-y-3">
+          <label className="inline-flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={halfDayEnabled}
+              disabled={fullWorkingDays.workingDays < 1}
+              onChange={(e) => setHalfDayEnabled(e.target.checked)}
+              className="rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+            />
+            Chỉ nghỉ nửa ngày (áp dụng cho ngày làm việc đầu tiên)
+          </label>
+
+          {halfDayEnabled && (
+            <div className="space-y-2">
+              {halfDayDate ? (
+                <>
+                  <p className="text-[11px] text-slate-600">
+                    Ngày {formatDateVN(halfDayDate)} chỉ nghỉ nửa buổi · tổng nghỉ{' '}
+                    <strong className="font-mono-num">{workingDays} ngày</strong>.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {(['Sáng', 'Chiều'] as const).map((session) => (
+                      <button
+                        key={session}
+                        type="button"
+                        onClick={() => setHalfDaySession(session)}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                          halfDaySession === session
+                            ? 'bg-amber-700 text-white border-amber-700'
+                            : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100'
+                        }`}
+                      >
+                        {getHalfDayTimeLabel(session)}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Giờ làm việc: 08:15–12:15 và 13:30–17:30 (nghỉ trưa 12:15–13:30).
+                    Điểm danh sẽ ghi nhận nhân sự làm việc buổi còn lại.
+                  </p>
+                </>
+              ) : (
+                <p className="text-[11px] text-amber-700">
+                  Khoảng ngày này không có ngày làm việc để nghỉ nửa ngày.
+                </p>
               )}
             </div>
           )}

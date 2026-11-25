@@ -1,4 +1,50 @@
-import type { CompanyHoliday, HolidayCategory } from '../types/leave';
+import type {
+  CompanyHoliday,
+  HalfDaySession,
+  HolidayCategory,
+} from '../types/leave';
+
+/** Giờ làm việc của công ty: 08:15–12:15 và 13:30–17:30 (nghỉ trưa 12:15–13:30). */
+export const COMPANY_WORK_TIME = {
+  morningStart: '08:15',
+  morningEnd: '12:15',
+  afternoonStart: '13:30',
+  afternoonEnd: '17:30',
+} as const;
+
+export function getHalfDayTimeLabel(session: HalfDaySession): string {
+  return session === 'Sáng'
+    ? `Sáng ${COMPANY_WORK_TIME.morningStart}–${COMPANY_WORK_TIME.morningEnd}`
+    : `Chiều ${COMPANY_WORK_TIME.afternoonStart}–${COMPANY_WORK_TIME.afternoonEnd}`;
+}
+
+/** Ngày làm việc đầu tiên của khoảng nghỉ — là ngày bị giảm còn nửa ngày. */
+export function getFirstWorkingDate(
+  startDate: string,
+  endDate: string,
+  holidays: CompanyHoliday[],
+): string {
+  const start = parseDateKey(startDate);
+  const end = parseDateKey(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return '';
+  const cursor = new Date(start);
+  let safety = 0;
+  while (cursor <= end && safety < 400) {
+    safety += 1;
+    const key = toDateKey(cursor);
+    if (isWorkingDay(key, holidays)) return key;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return '';
+}
+
+/** Nửa ngày trừ vào ngày làm việc đầu tiên, không phải cộng thêm 0,5 ngày. */
+export function applyHalfDayToWorkingDays(
+  fullWorkingDays: number,
+  halfDayEnabled: boolean,
+): number {
+  return halfDayEnabled && fullWorkingDays >= 1 ? fullWorkingDays - 0.5 : fullWorkingDays;
+}
 
 export function getHolidayCategoryLabel(category: HolidayCategory): string {
   return category === 'Ngày làm việc bù' ? 'OT' : category;

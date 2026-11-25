@@ -210,7 +210,11 @@ export function HolidayManager({
     const idSet = new Set<string>();
     if (isAdminView && managerRequests) {
       for (const req of managerRequests) {
-        if (req.status === 'Đã duyệt' && isDateInRange(selectedDay, req.startDate, req.endDate)) {
+        if (
+          req.status === 'Đã duyệt' &&
+          isDateInRange(selectedDay, req.startDate, req.endDate) &&
+          req.halfDay?.date !== selectedDay
+        ) {
           idSet.add(req.employeeId);
         }
       }

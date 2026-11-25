@@ -149,6 +149,15 @@
 - **Cách sửa:** thêm `where('year', '>=', 2020)` vào cả `onSnapshot` lẫn `getDocs` của `/leaveSummaries` (giống cách `subscribeHolidays` đã làm). Đồng thời `console.warn` để lỗi truy vấn/quỹ phép không còn bị im lặng khi chẩn đoán.
 - **Sau khi cập nhật:** chỉ cần Quản lý mở app một lần (để `syncLeaveSummaries` chạy), các thẻ quỹ phép sẽ có số liệu realtime cho mọi nhân viên.
 
+### 2.18 Nghỉ nửa ngày (0,5) và điểm danh theo buổi sáng / chiều
+
+- **Giờ công ty (chốt):** 08:15–12:15 (sáng), nghỉ trưa 12:15–13:30, 13:30–17:30 (chiều) — khai báo hằng số `COMPANY_WORK_TIME` trong `dateUtils.ts`.
+- **Luồng gửi đơn:** cả form nhân viên (`EmployeeLeaveRequestForm.tsx`) và form Quản lý (`LeaveRequestForm.tsx`) có checkbox **"Chỉ nghỉ nửa ngày"** + chọn buổi **Sáng / Chiều**. Nửa ngày được **trừ vào ngày làm việc đầu tiên** của khoảng (`getFirstWorkingDate` + `applyHalfDayToWorkingDays`): 1 ngày → 0,5; 3 ngày → 2,5. Các ô phân bổ loại phép vốn đã bước `step=0.5`, nên tổng phân bổ khớp `workingDays` thập phân.
+- **Dữ liệu đơn:** `LeaveRequestItem.halfDay = { date, session }` (optional) được ghi ở `submitEmployeeLeaveRequest` / `createManagerAllocatedLeaveRequest`; Quản lý có thể đổi buổi ngay trong hàng đợi duyệt (`approveLeaveRequest` nhận override). `mapRequestDoc` đọc lại trường này; rules cho phép `halfDay` trong create/update.
+- **Điểm danh:** `syncAllDailyOffStatuses` chỉ đưa nhân sự vào `offEmployeeIds` khi nghỉ **cả ngày**; ngày có `halfDay` được ghi vào mảng mới `dailyOffStatus.halfDayOff = [{ employeeId, session }]`. `subscribeDailyOffStatus` trả thêm mảng này. `AttendanceToday` giữ người nghỉ nửa buổi trong danh sách đi làm, hiện nhãn `Nghỉ: Sáng 08:15–12:15` / `Nghỉ: Chiều 13:30–17:30` và "Làm việc buổi còn lại" (quyền đọc công khai, không lý do / email). Lịch tháng + chi tiết ngày cũng hiện nhãn nửa ngày.
+- **Rules & blueprint:** `isValidDailyOffStatus` chấp nhận `halfDayOff`, `affectedKeys` cho phép cập nhật; `isValidLeaveRequest` chấp nhận `halfDay`; `firebase-blueprint.json` cập nhật theo. Cần deploy rules (GitHub Actions tự làm khi push `main`).
+- **Kiểm thử:** `npm run lint` + `npm run build` đạt ở cả repo nguồn và production.
+
 ---
 
 ## 3. Cấu trúc Firestore & Bảo mật (`firestore.rules`)

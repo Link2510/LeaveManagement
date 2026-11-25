@@ -86,7 +86,7 @@ service cloud.firestore {
 
     function isValidDailyOffStatus(data) {
       return data.keys().hasAll(['date', 'offEmployeeIds', 'updatedAt'])
-        && data.keys().hasOnly(['date', 'offEmployeeIds', 'updatedAt'])
+        && data.keys().hasOnly(['date', 'offEmployeeIds', 'halfDayOff', 'updatedAt'])
         && isValidDateString(data.date)
         && data.offEmployeeIds is list
         && data.offEmployeeIds.size() <= 100
@@ -94,6 +94,20 @@ service cloud.firestore {
           data.offEmployeeIds.size() == 0
           || isValidId(data.offEmployeeIds[0])
         )
+        && (!('halfDayOff' in data) || (
+          data.halfDayOff is list
+          && data.halfDayOff.size() <= 100
+          && (
+            data.halfDayOff.size() == 0
+            || (
+              data.halfDayOff[0] is map
+              && data.halfDayOff[0].keys().hasAll(['employeeId', 'session'])
+              && data.halfDayOff[0].keys().hasOnly(['employeeId', 'session'])
+              && isValidId(data.halfDayOff[0].employeeId)
+              && data.halfDayOff[0].session in ['Sáng', 'Chiều']
+            )
+          )
+        ))
         && data.updatedAt is timestamp;
     }
 
@@ -197,7 +211,7 @@ service cloud.firestore {
           'workingDays', 'reason', 'note', 'status', 'allocations',
           'hasHospitalCert', 'hospitalCertPending', 'attachmentName', 'attachmentUrl',
           'rejectionReason', 'processedBy', 'processedAt', 'emailHash', 'nameHash',
-          'submitterUid', 'createdAt', 'updatedAt'
+          'halfDay', 'submitterUid', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.employeeId)
         && data.employeeName is string && data.employeeName.size() >= 2 && data.employeeName.size() <= 100
@@ -218,6 +232,13 @@ service cloud.firestore {
         && (!('processedAt' in data) || (data.processedAt is string && data.processedAt.size() <= 64))
         && (!('emailHash' in data) || isValidSha256Id(data.emailHash))
         && (!('nameHash' in data) || isValidSha256Id(data.nameHash))
+        && (!('halfDay' in data) || (
+          data.halfDay is map
+          && data.halfDay.keys().hasAll(['date', 'session'])
+          && data.halfDay.keys().hasOnly(['date', 'session'])
+          && isValidDateString(data.halfDay.date)
+          && data.halfDay.session in ['Sáng', 'Chiều']
+        ))
         && isValidId(data.submitterUid)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -358,7 +379,7 @@ service cloud.firestore {
         && isValidDailyOffStatus(incoming())
         && incoming().date == existing().date
         && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly(['offEmployeeIds', 'updatedAt']);
+        && incoming().diff(existing()).affectedKeys().hasOnly(['offEmployeeIds', 'halfDayOff', 'updatedAt']);
       allow delete: if isValidDateString(dateKey) && isManager();
     }
 
@@ -414,8 +435,8 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && incoming().diff(existing()).affectedKeys().hasOnly([
-          'status', 'allocations', 'hasHospitalCert', 'hospitalCertPending', 'rejectionReason',
-          'processedBy', 'processedAt', 'emailHash', 'nameHash', 'updatedAt'
+          'status', 'allocations', 'halfDay', 'hasHospitalCert', 'hospitalCertPending',
+          'rejectionReason', 'processedBy', 'processedAt', 'emailHash', 'nameHash', 'updatedAt'
         ]);
       allow delete: if false;
     }

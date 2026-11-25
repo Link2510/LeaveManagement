@@ -3,6 +3,7 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, FileText } from 'l
 import type { CompanyHoliday, LeaveRequestItem } from '../types/leave';
 import {
   formatDateVN,
+  getHalfDayTimeLabel,
   getHolidayCategoryLabel,
   getMonthCalendarCells,
   getTodayKey,
@@ -334,6 +335,11 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
                   <span>{req.reason}</span>
                 </div>
 
+                {req.halfDay?.date === selectedDay && (
+                  <div className="text-[11px] text-amber-700">
+                    Nghỉ nửa ngày: {getHalfDayTimeLabel(req.halfDay.session)}
+                  </div>
+                )}
                 {req.allocations.length > 0 && (
                   <div className="text-xs text-slate-600 pt-1 border-t border-slate-200/70">
                     Phân bổ:{' '}

@@ -52,6 +52,7 @@ import {
   type Employee,
   type EmployeeQuota,
   type EmployeeStats,
+  type HalfDayOffEntry,
   type LeaveRequestContact,
   type LeaveRequestItem,
   type LeaveSummary,
@@ -117,6 +118,7 @@ export default function App() {
   const [contacts, setContacts] = useState<Record<string, LeaveRequestContact>>({});
   const [leaveSummaries, setLeaveSummaries] = useState<Record<string, LeaveSummary>>({});
   const [dailyOffEmployeeIds, setDailyOffEmployeeIds] = useState<string[]>([]);
+  const [halfDayOff, setHalfDayOff] = useState<HalfDayOffEntry[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
 
@@ -222,8 +224,11 @@ useEffect(() => {
     const unsubHolidays = subscribeHolidays((list) => {
       if (active) setHolidays(list);
     });
-    const unsubDailyOff = subscribeDailyOffStatus(todayKey, (ids) => {
-      if (active) setDailyOffEmployeeIds(ids);
+    const unsubDailyOff = subscribeDailyOffStatus(todayKey, (ids, half) => {
+      if (active) {
+        setDailyOffEmployeeIds(ids);
+        setHalfDayOff(half);
+      }
     });
     const unsubRequests = subscribeLeaveRequests(
       canReadManagerFirestore,
@@ -1146,6 +1151,7 @@ useEffect(() => {
                     employees={employees}
                     holidays={holidays}
                     dailyOffEmployeeIds={dailyOffEmployeeIds}
+                    halfDayOff={halfDayOff}
                     managerRequests={requests}
                     isManagerView={isManagerView}
                     loading={dataLoading}

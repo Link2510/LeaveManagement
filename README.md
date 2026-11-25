@@ -16,15 +16,22 @@
 
 | Mục | Mô tả |
 |---|---|
-| **Đăng ký nghỉ phép** | Chọn họ tên trong danh sách nhân sự, chọn khoảng ngày (tự trừ Thứ 7/Chủ nhật, ngày lễ, cộng ngày OT), nhập lý do/ghi chú. Không chọn loại phép — quản lý phân bổ khi duyệt. Có thể đính kèm liên kết Google Drive của giấy xác nhận nghỉ ốm. |
-| **Hôm nay ai đi làm** | Xem đồng nghiệp đang làm việc / nghỉ phép trong ngày. **Bấm vào thẻ một người** để xem số ngày phép năm và nghỉ việc riêng còn lại của người đó. |
+| **Đăng ký nghỉ phép** | Chọn họ tên trong danh sách nhân sự, chọn khoảng ngày (tự trừ Thứ 7/Chủ nhật, ngày lễ, cộng ngày OT), nhập lý do/ghi chú. Có thể chọn **"Chỉ nghỉ nửa ngày"** kèm buổi **Sáng** hoặc **Chiều**. Không chọn loại phép — quản lý phân bổ khi duyệt. Có thể đính kèm liên kết Google Drive của giấy xác nhận nghỉ ốm. |
+| **Hôm nay ai đi làm** | Xem đồng nghiệp đang làm việc / nghỉ phép trong ngày. Người nghỉ nửa buổi vẫn hiện trong danh sách với nhãn buổi nghỉ. **Bấm vào thẻ một người** để xem số ngày phép năm và nghỉ việc riêng còn lại của người đó. |
 | **Ngày nghỉ công ty** | Xem lịch lễ, nghỉ bù, OT của công ty. |
 
 Đơn gửi xong có trạng thái **Đang chờ duyệt**; quản lý chốt loại phép và phân bổ ngày khi duyệt. Đơn đã duyệt hiện trên lịch nghỉ tháng.
 
+#### Nghỉ nửa ngày & giờ làm việc
+
+- Giờ công ty: **08:15–12:15** (buổi sáng), nghỉ trưa **12:15–13:30**, **13:30–17:30** (buổi chiều).
+- Khi bật "Chỉ nghỉ nửa ngày", nửa ngày được trừ vào **ngày làm việc đầu tiên** của khoảng nghỉ: một ngày thành **0,5 ngày**, ba ngày thành **2,5 ngày**… Các ô phân bổ loại phép bước **0,5 ngày**.
+- Điểm danh ("Hôm nay ai đi làm") ghi nhận người đó làm việc **buổi còn lại**. Thẻ hiển thị `Nghỉ: Sáng 08:15–12:15` hoặc `Nghỉ: Chiều 13:30–17:30`; lịch nghỉ tháng và chi tiết ngày cũng hiện nhãn nửa ngày.
+- Dữ liệu điểm danh nửa ngày là collection `/dailyOffStatus/{ngày}` (`halfDayOff`: chỉ mã nhân sự + buổi nghỉ), không có lý do hay thông tin cá nhân.
+
 ### Dành cho Quản lý (đăng nhập)
 
-- **Duyệt đơn chờ**: hàng đợi đơn nhân viên tự gửi, sửa phân bổ (tổng phải bằng số ngày làm việc), duyệt hoặc từ chối kèm lý do bắt buộc, đánh dấu đã có giấy xác nhận nghỉ ốm.
+- **Duyệt đơn chờ**: hàng đợi đơn nhân viên tự gửi, sửa phân bổ (tổng phải bằng số ngày làm việc, bước 0,5 ngày), đổi buổi nghỉ nửa ngày (Sáng/Chiều), duyệt hoặc từ chối kèm lý do bắt buộc, đánh dấu đã có giấy xác nhận nghỉ ốm.
 - **Thông báo trong app**: chuông ở góc phải header với số chưa đọc, danh sách thông báo, đánh dấu đã đọc / đọc tất cả. Khi đang mở app mà có đơn mới, hiện **toast** góc dưới phải kèm nút “Xem đơn”. Ngoài ra có hẳn tab **Thông báo** trong menu quản lý: lọc Tất cả / Chưa đọc, tìm theo tên hoặc nội dung, xem trạng thái hiện tại của đơn liên quan.
 - **Phân bổ nghỉ cho nhân viên**: quản lý tạo đơn trực tiếp (trừ quỹ phép ngay).
 - **Bảng thống kê**, **Lịch nghỉ tháng**, **Quản lý nhân sự**, **Lịch sử nghỉ phép**, **Ngày nghỉ công ty**.
@@ -90,9 +97,9 @@ firebase deploy --only hosting
 | `/leaveSummaries/{employeeId}` | Số ngày phép năm / nghỉ việc riêng còn lại (chỉ số, không PII) | Công khai | Quản lý (tự đồng bộ) |
 | `/leaveRequestContacts/{id}` | Email liên hệ của **đơn cũ** (không còn ghi mới) | Quản lý | Người gửi đơn (tạo) / Quản lý |
 | `/notifications/{id}` | Thông báo trong app (chuông + toast) | Quản lý | Quản lý; nhân viên chỉ tạo thông báo "đơn mới" cho Quản lý |
-| `/dailyOffStatus`, `/monthlyOffStatus` | Chỉ số nghỉ phép không PII cho lịch/điểm danh | Công khai theo ngày/tháng | Quản lý |
+| `/dailyOffStatus`, `/monthlyOffStatus` | Chỉ số nghỉ phép không PII cho lịch/điểm danh; `dailyOffStatus.halfDayOff` chứa buổi nghỉ nửa ngày | Công khai theo ngày/tháng | Quản lý |
 
-`/leaveSummaries` do app quản lý tự tính lại khi danh sách đơn đã duyệt thay đổi; chỉ chứa `employeeId`, năm và các con số ngày.
+`/leaveSummaries` do app quản lý tự tính lại khi danh sách đơn đã duyệt thay đổi; chỉ chứa `employeeId`, năm và các con số ngày. `/dailyOffStatus` và `monthlyOffStatus` cũng do quản lý tự đồng bộ; nếu chưa có quản lý mở app, điểm danh có thể chậm cập nhật.
 
 ---
 
