@@ -173,6 +173,13 @@
 - Xoá `src/utils/urlUtils.ts` (không còn nơi dùng). Giữ các trường `attachmentUrl` / `attachmentName` trong type + rules để đọc đơn cũ, nhưng giao diện không hiển thị.
 - Cập nhật README (tính năng, giới hạn, quyền riêng tư). Không đổi `firestore.rules`, không cần deploy rules.
 
+### 2.21 Ẩn tab "Đăng ký nghỉ phép" khi đang ở chế độ Quản lý
+
+- Đính chính lần sửa trước: mục bị yêu cầu bỏ là tab **"Đăng ký nghỉ phép"** trên sidebar lúc đăng nhập **Admin**, không phải tab **"Phân bổ nghỉ cho nhân viên"**. Đã revert commit xoá nhầm (`3ef9c78` → `d192f6c`) để khôi phục tab Phân bổ + component `LeaveRequestForm.tsx` + hàm `createManagerAllocatedLeaveRequest`.
+- Cách ẩn đúng: thêm cờ `employeeOnly: true` cho item `employee-request` trong `navItems`; `visibleNavItems` lọc bỏ item này khi `showManagerWorkspace === true`. Tab vẫn hiện đầy đủ ở chế độ **Nhân viên** (kể cả khi Quản lý bật "Chế độ hiển thị → Nhân viên" để xem thử).
+- Hiệu ứng phụ: nếu đang mở tab `employee-request` rồi đăng nhập Quản lý (hoặc tắt preview Nhân viên), effect chuyển về `attendance` để không còn render form nhân viên trong chế độ Admin.
+- Không xoá luồng gửi đơn của nhân viên; không đổi rules; chỉ cập nhật README phần dành cho Quản lý.
+
 ---
 
 ## 3. Cấu trúc Firestore & Bảo mật (`firestore.rules`)

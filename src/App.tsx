@@ -373,15 +373,15 @@ useEffect(() => {
     const wasManager = prevManagerWorkspaceRef.current;
     prevManagerWorkspaceRef.current = showManagerWorkspace;
 
-    if (!showManagerWorkspace) {
-      const employeeTabs: NavTab[] = [
-        'attendance',
-        'employee-request',
-        'holidays',
-      ];
-      if (!employeeTabs.includes(activeTab)) {
-        setActiveTab('attendance');
-      }
+    if (showManagerWorkspace) {
+      // Tab "Đăng ký nghỉ phép" chỉ dành cho chế độ Nhân viên.
+      if (activeTab === 'employee-request') setActiveTab('attendance');
+      return;
+    }
+
+    const employeeTabs: NavTab[] = ['attendance', 'employee-request', 'holidays'];
+    if (!employeeTabs.includes(activeTab)) {
+      setActiveTab('attendance');
     }
   }, [showManagerWorkspace, activeTab]);
 
@@ -610,9 +610,15 @@ useEffect(() => {
     icon: typeof LayoutDashboard;
     badge?: number;
     managerOnly?: boolean;
+    employeeOnly?: boolean;
   }> = [
       { id: 'attendance', label: 'Hôm nay ai đi làm', icon: Smile },
-      { id: 'employee-request', label: 'Đăng ký nghỉ phép', icon: Send },
+      {
+        id: 'employee-request',
+        label: 'Đăng ký nghỉ phép',
+        icon: Send,
+        employeeOnly: true,
+      },
       { id: 'dashboard', label: 'Bảng thống kê', icon: LayoutDashboard, managerOnly: true },
       { id: 'calendar', label: 'Lịch nghỉ tháng', icon: CalendarDays, managerOnly: true },
       {
@@ -640,7 +646,11 @@ useEffect(() => {
       { id: 'holidays', label: 'Ngày nghỉ công ty', icon: CalendarOff },
     ];
 
-  const visibleNavItems = navItems.filter((item) => !item.managerOnly || showManagerWorkspace);
+  const visibleNavItems = navItems.filter(
+    (item) =>
+      (!item.managerOnly || showManagerWorkspace) &&
+      !(item.employeeOnly && showManagerWorkspace),
+  );
 
   const pageTitleMap: Record<NavTab, string> = {
     attendance: 'Hôm nay ai đi làm',
