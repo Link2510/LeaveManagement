@@ -688,6 +688,83 @@ export function subscribeLeaveContacts(
   );
 }
 
+export async function createManagerAllocatedLeaveRequest(input: {
+  employeeId: string;
+  employeeName: string;
+  department: Department;
+  startDate: string;
+  endDate: string;
+  workingDays: number;
+  reason: string;
+  note: string;
+  allocations: LeaveAllocation[];
+  halfDay?: HalfDayInfo;
+  hasHospitalCert: boolean;
+  hospitalCertPending?: boolean;
+  attachmentName: string;
+  attachmentUrl?: string;
+  status: 'Đã duyệt' | 'Đang chờ duyệt';
+  managerUid: string;
+  managerLabel: string;
+}): Promise<string> {
+  const reqId = generateSafeId('req');
+  const notifId = generateSafeId('notif');
+  const cleanName = clampString(input.employeeName, 100);
+  const sanitizedAllocations = input.allocations
+    .filter((a) => a.days > 0)
+    .slice(0, 6)
+    .map((a) => ({ type: a.type, days: Number(a.days) }));
+  const cleanAttachmentUrl = input.attachmentUrl ? clampString(input.attachmentUrl, 500) : '';
+  const cleanManager = clampString(input.managerLabel || 'Quản lý', 120);
+  const nowIso = new Date().toISOString();
+
+  try {
+    const batch = writeBatch(db);
+    const reqPayload: Record<string, unknown> = {
+      employeeId: clampString(input.employeeId, 128),
+      employeeName: cleanName,
+      department: input.department,
+      startDate: clampString(input.startDate, 10),
+      endDate: clampString(input.endDate, 10),
+      workingDays: Number(input.workingDays),
+      reason: clampString(input.reason, 500),
+      note: clampString(input.note || '', 500),
+      status: input.status,
+      allocations: sanitizedAllocations,
+      ...(cleanHalfDay(input.halfDay) ? { halfDay: cleanHalfDay(input.halfDay) } : {}),
+      hasHospitalCert: Boolean(input.hasHospitalCert),
+      hospitalCertPending: Boolean(input.hospitalCertPending),
+      attachmentName: clampString(input.attachmentName || '', 180),
+      processedBy: cleanManager,
+      processedAt: nowIso,
+      submitterUid: clampString(input.managerUid, 128),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    if (cleanAttachmentUrl) {
+      reqPayload.attachmentUrl = cleanAttachmentUrl;
+    }
+    batch.set(doc(db, 'leaveRequests', reqId), reqPayload);
+
+    if (input.status === 'Đang chờ duyệt') {
+      batch.set(doc(db, 'notifications', notifId), {
+        recipientType: 'admin',
+        recipientUid: 'admin',
+        requestId: reqId,
+        title: `Đơn chờ duyệt mới: ${clampString(input.employeeName, 80)}`,
+        message: `${cleanManager} đã tạo đơn nghỉ ${input.workingDays} ngày (${input.startDate} → ${input.endDate}) cho ${clampString(input.employeeName, 80)} ở trạng thái chờ duyệt.`,
+        isRead: false,
+        createdAt: serverTimestamp(),
+      });
+    }
+
+    await batch.commit();
+    return reqId;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `leaveRequests/${reqId}`);
+  }
+}
+
 export interface EmployeeLeaveSubmissionInput {
   employeeId: string;
   employeeName: string;
