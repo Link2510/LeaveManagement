@@ -158,6 +158,14 @@
 - **Rules & blueprint:** `isValidDailyOffStatus` chấp nhận `halfDayOff`, `affectedKeys` cho phép cập nhật; `isValidLeaveRequest` chấp nhận `halfDay`; `firebase-blueprint.json` cập nhật theo. Cần deploy rules (GitHub Actions tự làm khi push `main`).
 - **Kiểm thử:** `npm run lint` + `npm run build` đạt ở cả repo nguồn và production.
 
+### 2.19 Xuất Excel danh sách ngày nghỉ theo tháng
+
+- Nút **"Xuất Excel tháng này"** nằm trên đầu trang **Lịch nghỉ tháng** (`MonthlyCalendar.tsx`), dùng đúng tháng đang xem (có chuyển tháng bằng mũi tên). Hiện dòng thông báo số bản ghi đã xuất.
+- `src/utils/excelExport.ts` tạo file `.xlsx` **hoàn toàn ở client**, **không thêm dependency**: viết ZIP chế độ stored (có CRC-32) gồm các part XML của OOXML, dùng inline string nên không cần shared strings.
+- Dữ liệu: chỉ đơn **Đã duyệt** có ít nhất một ngày làm việc trong tháng. Mỗi ngày làm việc của đơn thành một dòng (ngày nghỉ nửa buổi ghi `0.5` + buổi Sáng/Chiều). Phân bổ loại phép được chia tuần tự theo từng ngày (`splitAllocationsByDays`) để tổng khớp exact.
+- Ba sheet: **Chi tiet ngay nghi** (12 cột, có lý do/ghi chú/mã đơn/người duyệt), **Tong hop nhan vien** (số ngày theo 6 loại phép), **Thong tin** (tháng, giờ công ty, nguồn Firestore nội bộ, thời điểm xuất, ghi chú quyền riêng tư).
+- **Kiểm chứng:** tạo file mẫu bằng `tsx`, mở bằng `zipfile` + `ElementTree` của Python: CRC/ZIP hợp lệ, XML hợp lệ, dòng dữ liệu đúng (ngày 02/11 nửa ngày `0.5`, ngày 03/11 chia `Phép năm 0.5 + Nghỉ việc riêng 0.5`). Đã xoá file test. `npm run lint` + `npm run build` đạt.
+
 ---
 
 ## 3. Cấu trúc Firestore & Bảo mật (`firestore.rules`)

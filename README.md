@@ -35,6 +35,7 @@
 - **Thông báo trong app**: chuông ở góc phải header với số chưa đọc, danh sách thông báo, đánh dấu đã đọc / đọc tất cả. Khi đang mở app mà có đơn mới, hiện **toast** góc dưới phải kèm nút “Xem đơn”. Ngoài ra có hẳn tab **Thông báo** trong menu quản lý: lọc Tất cả / Chưa đọc, tìm theo tên hoặc nội dung, xem trạng thái hiện tại của đơn liên quan.
 - **Phân bổ nghỉ cho nhân viên**: quản lý tạo đơn trực tiếp (trừ quỹ phép ngay).
 - **Bảng thống kê**, **Lịch nghỉ tháng**, **Quản lý nhân sự**, **Lịch sử nghỉ phép**, **Ngày nghỉ công ty**.
+- **Xuất Excel theo tháng**: trong **Lịch nghỉ tháng**, bấm **"Xuất Excel tháng này"** để tải file `NghiPhep_YYYY-MM.xlsx` phục vụ lưu trữ/đối chiếu. File có 3 sheet: **Chi tiết ngày nghỉ** (mỗi ngày làm việc một dòng: ngày, thứ, nhân viên, phòng ban, buổi nghỉ, số ngày, loại phép phân bổ, lý do, bàn giao, mã đơn, người duyệt, thời điểm duyệt), **Tổng hợp theo nhân viên** (số ngày từng loại phép) và **Thông tin** (tháng, giờ làm việc, nguồn dữ liệu, thời điểm xuất). Chỉ gồm đơn **đã duyệt** có ngày làm việc trong tháng đang xem.
 
 > Thông báo chỉ hoạt động **trong app khi quản lý đang đăng nhập**. Không có email, không có push khi app đóng.
 
@@ -119,6 +120,7 @@ firebase deploy --only hosting
 
 - Chỉ dữ liệu tới **Cloud Firestore** của project `leave-management-vn` (Google Firebase): họ tên, phòng ban, khoảng ngày nghỉ, số ngày, lý do, ghi chú, liên kết Drive (nếu có), trạng thái duyệt, người xử lý, và số ngày phép còn lại.
 - **Không** gửi email, không gọi dịch vụ bên thứ ba nào. Không có Google Analytics, không telemetry, không tracking pixel, không quảng cáo, không đọc clipboard, không chụp màn hình, không đọc file trên máy.
+- File Excel được **tạo ngay trong trình duyệt** (`src/utils/excelExport.ts`, ZIP + XML thuần, không thư viện Excel), tải xuống máy bạn; app không upload file đi đâu. Nội dung có lý do/ghi chú của đơn nên chỉ nên lưu ở máy/workspace được phép của công ty.
 
 **Thông báo trong app** (chuông + toast) chỉ là document trong `/notifications` của Firestore, đọc realtime khi quản lý đăng nhập. Không có push notification, không đăng ký service worker, không lấy token thiết bị.
 

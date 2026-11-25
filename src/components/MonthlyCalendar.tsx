@@ -1,5 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import {
+  Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  FileText,
+} from 'lucide-react';
 import type { CompanyHoliday, LeaveRequestItem } from '../types/leave';
 import {
   formatDateVN,
@@ -12,6 +18,7 @@ import {
   isWorkingDay,
   parseDateKey,
 } from '../utils/dateUtils';
+import { exportMonthlyLeaveExcel } from '../utils/excelExport';
 import { StatusLabel } from './StatusBadge';
 
 interface MonthlyCalendarProps {
@@ -34,6 +41,7 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [selectedDay, setSelectedDay] = useState<string>(getTodayKey());
+  const [exportNotice, setExportNotice] = useState('');
 
   const todayKey = getTodayKey();
   const cells = useMemo(() => getMonthCalendarCells(viewYear, viewMonth), [viewYear, viewMonth]);
@@ -77,6 +85,7 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
   const selectedHoliday = holidayByDate.get(selectedDay);
 
   const prevMonth = () => {
+    setExportNotice('');
     if (viewMonth === 0) {
       setViewYear((y) => y - 1);
       setViewMonth(11);
@@ -86,6 +95,7 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
   };
 
   const nextMonth = () => {
+    setExportNotice('');
     if (viewMonth === 11) {
       setViewYear((y) => y + 1);
       setViewMonth(0);
@@ -95,6 +105,7 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
   };
 
   const goToday = () => {
+    setExportNotice('');
     const d = new Date();
     setViewYear(d.getFullYear());
     setViewMonth(d.getMonth());
@@ -143,8 +154,39 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  const count = exportMonthlyLeaveExcel({
+                    requests,
+                    holidays,
+                    year: viewYear,
+                    monthIndex: viewMonth,
+                  });
+                  setExportNotice(
+                    count > 0
+                      ? `Đã xuất ${count} ngày nghỉ của ${monthLabel}.`
+                      : `Tháng ${monthLabel} không có ngày nghỉ đã duyệt để xuất.`,
+                  );
+                } catch {
+                  setExportNotice('Không thể tạo file Excel. Vui lòng thử lại.');
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Xuất Excel tháng này
+            </button>
           </div>
         </div>
+
+        {exportNotice && (
+          <div className="px-6 py-2 text-[11px] text-slate-600 bg-slate-50 border-b border-slate-200">
+            {exportNotice}
+          </div>
+        )}
 
         {/* Status Legend */}
         <div className="px-6 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-5 text-xs text-slate-600">
