@@ -133,6 +133,16 @@
 - **Dữ liệu:** dùng lại `/notifications` (`recipientType == 'admin'`) do `submitEmployeeLeaveRequest` ghi trong cùng batch; `subscribeNotifications` / `markNotificationRead` / `markAllNotificationsRead` trước đây là code chết nay đã nối vào App.
 - **Giới hạn:** chỉ hoạt động khi Quản lý đang mở app và đã đăng nhập; không push notification, không service worker, không email. Super admin dùng chung cơ chế `isManager()` nên thấy giống hệt Quản lý.
 
+### 2.16 Gọn luồng nhân viên + tên quản lý thật + quỹ phép trên thẻ đi làm
+
+- **Bỏ toàn bộ tra cứu đơn (`EmployeeLeaveLookup.tsx`, `emailLookups`, `nameLookups`, `syncMissingLookups`, `hashUtils.ts`):** đơn đã duyệt đã hiện trên **Lịch nghỉ tháng**, nên nhân viên không cần tra cứu trạng thái riêng. Rules cũng bỏ hai khối lookup; dữ liệu cũ trong Firestore giữ nguyên nhưng không còn được ghi/đọc.
+- **Form nhân viên gọn hơn (`EmployeeLeaveRequestForm.tsx`):** bỏ ô **email** và mục **Loại nghỉ đề xuất**; đơn gửi đi có `allocations: []` để Quản lý tự phân bổ khi duyệt. Giấy xác nhận nghỉ ốm vẫn giữ dưới dạng tuỳ chọn (checkbox + liên kết Drive), không còn phụ thuộc việc chọn loại phép.
+- **Không thu thập email:** `submitEmployeeLeaveRequest` không ghi `leaveRequestContacts`, `emailHash`, `nameHash` nữa; đơn cũ vẫn đọc được contact nếu đã có.
+- **Tên quản lý thật (`src/utils/managerUtils.ts`):** `managerNameForUid` lấy `name` trong `/managers/{uid}` thay vì `displayName`/email; `resolveManagerName` quy đổi cả username và pseudo-email `<username>@accounts.leave-management.invalid` của dữ liệu cũ sang tên thật khi hiển thị ở **Lịch sử nghỉ phép** (cột "Người & thời điểm ghi nhận").
+- **Quỹ phép công khai (`/leaveSummaries/{employeeId}`):** Quản lý tự đồng bộ khi mở app (`syncLeaveSummaries`) từ đơn đã duyệt + hạn mức; mọi người đọc được **chỉ số ngày**. Bấm thẻ đồng nghiệp ở **Hôm nay ai đi làm** mở popup hiển thị phép năm và nghỉ việc riêng còn lại, không có lý do hay email.
+- **Dashboard:** ba thẻ KPI (tổng nhân viên, đang nghỉ hôm nay, đã ghi nhận tháng này) → **Lịch nghỉ tháng full chiều rộng** ngay dưới → bảng thống kê. Panel "Chi tiết ngày chọn" chuyển xuống dưới lịch thay vì cột phải.
+- **Kiểm thử:** `npm run lint` và `npm run build` đều đạt; cần deploy `firestore.rules` mới (thêm `/leaveSummaries`, bỏ lookup) trước khi dùng tính năng quỹ phép trên production.
+
 ---
 
 ## 3. Cấu trúc Firestore & Bảo mật (`firestore.rules`)
@@ -146,9 +156,8 @@
 | `/dailyOffStatus/{dateKey}` | Danh sách ID nhân sự đang nghỉ phép đã duyệt theo ngày (không PII) | Nhân viên đọc đơn lẻ theo `YYYY-MM-DD`; Quản lý đồng bộ | Chỉ Quản lý |
 | `/monthlyOffStatus/{monthKey}` | Danh sách nhân sự & các ngày nghỉ phép đã duyệt theo tháng (không PII) | Nhân viên đọc đơn lẻ theo `YYYY-MM`; Quản lý đồng bộ | Chỉ Quản lý |
 | `/leaveRequests/{requestId}` | Hồ sơ đơn xin nghỉ phép đầy đủ | Quản lý; nhân viên chỉ `get` đơn do chính uid ẩn danh của mình tạo | Quản lý; nhân viên chỉ được **tạo** đơn `Đang chờ duyệt` gắn đúng `submitterUid`; Không cho xóa |
-| `/leaveRequestContacts/{requestId}` | Email liên hệ của đơn nghỉ (tách riêng PII) | Chỉ Quản lý | Người gửi đơn tạo trong cùng batch (khớp `getAfter`); Quản lý đọc; Không sửa/xóa |
-| `/emailLookups/{emailHash}/requests/{requestId}` | Bản tóm tắt trạng thái theo mã băm email | Quản lý hoặc đúng `emailHash` | Quản lý; người gửi tạo trong cùng batch; Không xóa |
-| `/nameLookups/{nameHash}/requests/{requestId}` | Bản tóm tắt trạng thái theo mã băm họ tên đã chuẩn hoá dấu | Quản lý hoặc đúng `nameHash` | Quản lý; người gửi tạo trong cùng batch; Không xóa |
+| `/leaveSummaries/{employeeId}` | Số ngày phép năm / nghỉ việc riêng đã dùng và còn lại (chỉ số, không PII) | Công khai | Chỉ Quản lý (app tự đồng bộ) |
+| `/leaveRequestContacts/{requestId}` | Email liên hệ của **đơn cũ** (không còn ghi mới) | Chỉ Quản lý | Người gửi đơn tạo trong cùng batch (khớp `getAfter`); Quản lý đọc; Không sửa/xóa |
 | `/notifications/{notificationId}` | Thông báo nội bộ cho Quản lý | Chỉ Quản lý | Quản lý; nhân viên chỉ được tạo thông báo `admin` cho đơn do chính mình gửi |
 
 ---
@@ -159,10 +168,10 @@
 |---|---|
 | `src/App.tsx` | Khung ứng dụng, điều hướng 2 chế độ Nhân viên / Quản lý, hiệu ứng menu, KPI tổng quan |
 | `src/firebase.ts` | Khởi tạo Firebase App, Auth (Google), Firestore và xử lý lỗi chuẩn hóa |
-| `src/types/leave.ts` | Định nghĩa kiểu dữ liệu nhân viên, hạn mức phép, đơn nghỉ, tra cứu email, ngày nghỉ công ty |
+| `src/types/leave.ts` | Định nghĩa kiểu dữ liệu nhân viên, hạn mức phép, đơn nghỉ, quỹ phép tóm tắt, ngày nghỉ công ty |
 | `src/services/firestoreService.ts` | Toàn bộ thao tác đọc/ghi realtime và batch Firestore |
 | `src/utils/dateUtils.ts` | Tính ngày làm việc (Thứ 2–6, loại trừ lễ, cộng ngày OT), tạo ô lịch tháng, định dạng ngày/thứ VN |
-| `src/utils/hashUtils.ts` | Hàm băm `sha256Email` phục vụ tra cứu đơn cá nhân an toàn |
+| `src/utils/managerUtils.ts` | Quy đổi uid / username / pseudo-email cũ sang tên quản lý thật khi hiển thị |
 | `src/utils/urlUtils.ts` | Kiểm tra và làm sạch liên kết Google Drive hợp lệ (`drive.google.com`, `docs.google.com`) |
 | `src/components/LeaveRequestForm.tsx` | Biểu mẫu dành riêng cho Quản lý đăng ký, chia phân bổ nhiều loại phép, kiểm tra quỹ phép còn lại & trừ phép ngay |
 | `src/components/VietnameseDatePicker.tsx` | Bộ chọn ngày tiếng Việt tùy chỉnh với tiêu đề Thứ 2 – Chủ nhật |
@@ -170,10 +179,9 @@
 | `src/components/MonthlyCalendar.tsx` | Lịch nghỉ toàn công ty theo tháng dành cho Quản lý |
 | `src/components/LeaveStatsTable.tsx` | Bảng thống kê phép nhân viên (phân trang 5 người/trang, lọc năm/phòng ban) |
 | `src/components/EmployeeManager.tsx` | Quản lý danh sách nhân viên, avatar, hạn mức phép và tài khoản Quản lý |
-| `src/components/ApprovalHistory.tsx` | Lịch sử đăng ký, phân bổ nghỉ phép & xác nhận nộp bổ sung giấy nghỉ ốm |
-| `src/components/AttendanceToday.tsx` | Tab Hôm nay ai đi làm (lọc phòng ban, tìm tên, trạng thái làm việc trong ngày) |
-| `src/components/EmployeeLeaveRequestForm.tsx` | Form nhân viên tự gửi đơn nghỉ phép không cần đăng nhập |
-| `src/components/EmployeeLeaveLookup.tsx` | Tra cứu đơn của tôi theo email hoặc họ tên đầy đủ |
+| `src/components/ApprovalHistory.tsx` | Lịch sử đăng ký, phân bổ nghỉ phép & xác nhận nộp bổ sung giấy nghỉ ốm; hiển thị tên quản lý thật |
+| `src/components/AttendanceToday.tsx` | Tab Hôm nay ai đi làm (lọc phòng ban, tìm tên, trạng thái làm việc) + popup quỹ phép còn lại khi bấm thẻ |
+| `src/components/EmployeeLeaveRequestForm.tsx` | Form nhân viên tự gửi đơn nghỉ phép (không email, không chọn loại phép) |
 | `src/components/LeaveApprovalQueue.tsx` | Hàng đợi duyệt đơn chờ dành cho Quản lý |
 | `src/components/NotificationsPage.tsx` | Trang thông báo của Quản lý (lọc chưa đọc, tìm kiếm, đánh dấu đã đọc) |
 | `README.md` | Hướng dẫn cài đặt, bật Anonymous Auth, deploy rules và mục **Quyền riêng tư** |

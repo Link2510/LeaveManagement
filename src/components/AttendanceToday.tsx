@@ -1,6 +1,12 @@
-import React, { useMemo, useState } from 'react';
-import { CalendarCheck2, Search, Sparkles, Users } from 'lucide-react';
-import type { CompanyHoliday, Department, Employee, LeaveRequestItem } from '../types/leave';
+import React, { useEffect, useMemo, useState } from 'react';
+import { CalendarCheck2, Search, Sparkles, Users, X } from 'lucide-react';
+import type {
+  CompanyHoliday,
+  Department,
+  Employee,
+  LeaveRequestItem,
+  LeaveSummary,
+} from '../types/leave';
 import {
   formatDateVN,
   getTodayKey,
@@ -17,6 +23,7 @@ interface AttendanceTodayProps {
   managerRequests?: LeaveRequestItem[];
   isManagerView: boolean;
   loading: boolean;
+  summaries?: Record<string, LeaveSummary>;
 }
 
 
@@ -27,18 +34,23 @@ export function AttendanceToday({
   managerRequests = [],
   isManagerView,
   loading,
+  summaries = {},
 }: AttendanceTodayProps) {
-
-  console.log('[ATTENDANCE TRACE]', {
-  loading,
-  employeesCount: employees.length,
-  isManagerView,
-});
 
   const [searchTerm, setSearchTerm] = useState('');
   const [deptFilter, setDeptFilter] = useState<'ALL' | Department>('ALL');
   const [globalWobblePulse, setGlobalWobblePulse] = useState(0);
   const [cardPulses, setCardPulses] = useState<Record<string, number>>({});
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+
+  useEffect(() => {
+    if (!selectedEmployee) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedEmployee(null);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [selectedEmployee]);
 
   const triggerCardPulse = (empId: string) => {
     setCardPulses((prev) => ({ ...prev, [empId]: (prev[empId] || 0) + 1 }));
@@ -199,8 +211,9 @@ export function AttendanceToday({
             <button
               key={emp.id}
               type="button"
-              onClick={() => triggerCardPulse(emp.id)}
+              onClick={() => setSelectedEmployee(emp)}
               onMouseEnter={() => triggerCardPulse(emp.id)}
+              aria-label={`Xem quỹ phép của ${emp.name}`}
               className="bg-white border border-slate-200 hover:border-teal-300 active:scale-[0.98] rounded-xl overflow-hidden flex flex-col items-center text-center transition-all group cursor-pointer"
             >
               <div className="w-full pt-4 pb-2 px-4 bg-gradient-to-b from-sky-50/80 via-slate-50/40 to-slate-100/70 border-b border-slate-100 flex flex-col items-center justify-end">
@@ -221,10 +234,104 @@ export function AttendanceToday({
                 <div className="mt-2 text-[11px] font-medium text-emerald-700">
                   Đang làm việc
                 </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  Bấm để xem quỹ phép
+                </div>
               </div>
             </button>
           ))}
         </section>
+      )}
+
+      {selectedEmployee && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Quỹ phép của ${selectedEmployee.name}`}
+          onClick={() => setSelectedEmployee(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40"
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-md bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden"
+          >
+            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-200">
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold text-slate-900 truncate">
+                  {selectedEmployee.name}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {selectedEmployee.department} · Quỹ phép năm{' '}
+                  {summaries[selectedEmployee.id]?.year || new Date().getFullYear()}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedEmployee(null)}
+                aria-label="Đóng"
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5">
+              {(() => {
+                const summary = summaries[selectedEmployee.id];
+                if (!summary) {
+                  return (
+                    <p className="text-sm text-slate-500">
+                      Chưa có dữ liệu quỹ phép của nhân sự này. Quản lý cần mở ứng
+                      dụng một lần để đồng bộ số ngày còn lại.
+                    </p>
+                  );
+                }
+                return (
+                  <div className="space-y-3">
+                    <div className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-3">
+                      <div className="text-xs font-medium text-teal-800">
+                        Phép năm còn lại
+                      </div>
+                      <div className="mt-1 flex items-baseline gap-1.5">
+                        <span className="text-2xl font-bold text-teal-900 font-mono-num tabular-nums">
+                          {summary.annualRemaining}
+                        </span>
+                        <span className="text-xs text-teal-800">
+                          / {summary.annualInitial} ngày
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-teal-800/80 mt-1">
+                        Đã dùng {summary.annualUsed} ngày
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="text-xs font-medium text-slate-600">
+                        Nghỉ việc riêng còn lại
+                      </div>
+                      <div className="mt-1 flex items-baseline gap-1.5">
+                        <span className="text-2xl font-bold text-slate-900 font-mono-num tabular-nums">
+                          {summary.personalRemaining}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          / {summary.personalInitial} ngày
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-1">
+                        Đã dùng {summary.personalUsed} ngày
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Số ngày chỉ tính các đơn đã được duyệt trong năm. Không hiển
+                      thị lý do nghỉ hay thông tin liên hệ.
+                    </p>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -5,17 +5,13 @@ import {
   CalendarDays,
   CheckCircle2,
   Info,
-  Mail,
-  Search,
   Send,
   Stethoscope,
 } from 'lucide-react';
 import type {
   CompanyHoliday,
   Employee,
-  LeaveType,
 } from '../types/leave';
-import { ALL_LEAVE_TYPES } from '../types/leave';
 import { submitEmployeeLeaveRequest } from '../services/firestoreService';
 import { calculateWorkingDays, formatDateVN, getTodayKey } from '../utils/dateUtils';
 import { validateGoogleDriveUrl } from '../utils/urlUtils';
@@ -24,35 +20,16 @@ import { VietnameseDatePicker } from './VietnameseDatePicker';
 interface EmployeeLeaveRequestFormProps {
   employees: Employee[];
   holidays: CompanyHoliday[];
-  onSubmitted?: (result: {
-    requestId: string;
-    email: string;
-    employeeName: string;
-  }) => void;
-  onGoLookup?: (email: string) => void;
 }
-
-const LEAVE_TYPE_HINTS: Record<LeaveType, string> = {
-  'Phép năm': 'Trừ vào quỹ phép năm còn lại của bạn.',
-  'Nghỉ việc riêng': 'Việc riêng theo quy định (cưới hỏi, tang lễ...).',
-  'Nghỉ ốm': 'Nghỉ ốm / điều trị; có thể bổ sung giấy xác nhận sau.',
-  'Thai sản': 'Nghỉ thai sản theo chế độ.',
-  'Nghỉ hưởng lương': 'Nghỉ có hưởng lương theo thoả thuận.',
-  'Nghỉ không lương': 'Không tính lương trong thời gian nghỉ.',
-};
 
 export function EmployeeLeaveRequestForm({
   employees,
   holidays,
-  onSubmitted,
-  onGoLookup,
 }: EmployeeLeaveRequestFormProps) {
   const today = getTodayKey();
   const [employeeId, setEmployeeId] = useState('');
-  const [email, setEmail] = useState('');
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
-  const [proposedType, setProposedType] = useState<LeaveType>('Phép năm');
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [hasHospitalCert, setHasHospitalCert] = useState(false);
@@ -63,7 +40,6 @@ export function EmployeeLeaveRequestForm({
   const [success, setSuccess] = useState<{
     requestId: string;
     employeeName: string;
-    email: string;
     startDate: string;
     endDate: string;
     workingDays: number;
@@ -80,14 +56,11 @@ export function EmployeeLeaveRequestForm({
       [startDate, endDate, holidays],
     );
 
-  const isSick = proposedType === 'Nghỉ ốm';
-
   const resetForm = () => {
     setReason('');
     setNote('');
     setHasHospitalCert(false);
     setAttachmentUrl('');
-    setProposedType('Phép năm');
     setStartDate(today);
     setEndDate(today);
   };
@@ -99,11 +72,6 @@ export function EmployeeLeaveRequestForm({
 
     if (!selectedEmployee) {
       setErrorMsg('Vui lòng chọn họ tên của bạn trong danh sách nhân sự.');
-      return;
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) {
-      setErrorMsg('Email không hợp lệ. Vui lòng nhập email bạn dùng để tra cứu đơn.');
       return;
     }
 
@@ -125,7 +93,7 @@ export function EmployeeLeaveRequestForm({
     }
 
     let cleanAttachmentUrl = '';
-    if (isSick && attachmentUrl.trim()) {
+    if (attachmentUrl.trim()) {
       const check = validateGoogleDriveUrl(attachmentUrl);
       if (!check.valid) {
         setErrorMsg(check.error || 'Đường dẫn Google Drive không hợp lệ.');
@@ -140,32 +108,24 @@ export function EmployeeLeaveRequestForm({
         employeeId: selectedEmployee.id,
         employeeName: selectedEmployee.name,
         department: selectedEmployee.department,
-        email: email.trim(),
         startDate,
         endDate,
         workingDays,
-        proposedType,
         reason: reason.trim(),
         note: note.trim(),
-        hasHospitalCert: isSick ? hasHospitalCert : false,
+        hasHospitalCert,
         attachmentUrl: cleanAttachmentUrl,
       });
 
       setSuccess({
         requestId: result.requestId,
         employeeName: selectedEmployee.name,
-        email: email.trim(),
         startDate,
         endDate,
         workingDays,
       });
 
       resetForm();
-      onSubmitted?.({
-        requestId: result.requestId,
-        email: email.trim(),
-        employeeName: selectedEmployee.name,
-      });
     } catch (err) {
       setErrorMsg(
         err instanceof Error
@@ -185,9 +145,9 @@ export function EmployeeLeaveRequestForm({
           <p className="font-semibold">Nhân viên gửi đơn không cần đăng nhập</p>
           <p>
             Đơn sẽ được gửi tới quản lý để duyệt. Hệ thống <strong>không gửi email</strong>{' '}
-            thông báo; bạn tự xem kết quả tại mục{' '}
-            <strong>Tra cứu đơn của tôi</strong> bằng email đã điền hoặc bằng họ tên
-            đầy đủ.
+            thông báo và <strong>không thu thập email</strong> của bạn. Khi đơn được
+            duyệt, lịch nghỉ sẽ xuất hiện ở mục <strong>Lịch nghỉ tháng</strong> và
+            danh sách <strong>Hôm nay ai đi làm</strong>.
           </p>
         </div>
       </div>
@@ -199,8 +159,8 @@ export function EmployeeLeaveRequestForm({
             Đăng ký nghỉ phép
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Chọn đúng họ tên và nhập email dùng để tra cứu. Quản lý sẽ chốt loại
-            phép và phân bổ ngày khi duyệt đơn.
+            Chọn đúng họ tên và khoảng ngày nghỉ. Quản lý sẽ chốt loại phép và phân
+            bổ ngày khi duyệt đơn.
           </p>
         </div>
 
@@ -235,21 +195,11 @@ export function EmployeeLeaveRequestForm({
                     Mã đơn: <span className="font-mono-num">{success.requestId}</span>
                   </div>
                   <div className="mt-1">
-                    Kết quả duyệt xem tại mục <strong>Tra cứu đơn của tôi</strong> bằng
-                    email <strong>{success.email}</strong> hoặc họ tên của bạn.
+                    Quản lý sẽ duyệt đơn trong ứng dụng. Khi được duyệt, lịch nghỉ
+                    xuất hiện ở mục <strong>Lịch nghỉ tháng</strong>.
                   </div>
                 </div>
                 <div className="pt-1 flex flex-wrap items-center gap-2">
-                  {onGoLookup && (
-                    <button
-                      type="button"
-                      onClick={() => onGoLookup(success.email)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 rounded-md transition-colors whitespace-nowrap"
-                    >
-                      <Search className="w-3.5 h-3.5" />
-                      Tra cứu đơn vừa gửi
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={() => setSuccess(null)}
@@ -291,30 +241,15 @@ export function EmployeeLeaveRequestForm({
               </p>
             </div>
 
-            <div>
-              <label
-                htmlFor="emp-email"
-                className="block text-xs font-medium text-slate-700 mb-1.5"
-              >
-                Email dùng để tra cứu
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  id="emp-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="ten.ban@congty.com"
-                  autoComplete="email"
-                  maxLength={160}
-                  required
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
-                />
+            <div className="px-3.5 py-2 rounded-lg bg-slate-50 border border-slate-200 self-start">
+              <div className="text-xs font-medium text-slate-600">
+                Phòng ban
+              </div>
+              <div className="text-sm font-semibold text-slate-900 mt-0.5">
+                {selectedEmployee?.department || '—'}
               </div>
               <p className="text-[11px] text-slate-500 mt-1">
-                Hệ thống không gửi email. Email chỉ dùng để bạn tra cứu lại đơn; hồ
-                sơ nội bộ lưu email này để quản lý liên hệ khi cần.
+                Hệ thống không thu thập email hay thông tin liên hệ cá nhân.
               </p>
             </div>
           </div>
@@ -394,77 +329,46 @@ export function EmployeeLeaveRequestForm({
             )}
           </div>
 
-          <div>
-            <label
-              htmlFor="emp-type"
-              className="block text-xs font-medium text-slate-700 mb-1.5"
-            >
-              Loại nghỉ đề xuất
-            </label>
-            <select
-              id="emp-type"
-              value={proposedType}
-              onChange={(e) => setProposedType(e.target.value as LeaveType)}
-              className="w-full max-w-md px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
-            >
-              {ALL_LEAVE_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-slate-500 mt-1">
-              {LEAVE_TYPE_HINTS[proposedType]} Quản lý sẽ chốt phân bổ chính thức
-              khi duyệt.
+          <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-3">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
+              <Stethoscope className="w-4 h-4 text-teal-700" />
+              Giấy xác nhận nghỉ ốm (tuỳ chọn)
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Chỉ điền khi bạn nghỉ ốm và đã có giấy xác nhận của bệnh viện / cơ sở
+              y tế. Quản lý sẽ phân bổ loại phép khi duyệt đơn.
             </p>
-          </div>
-
-          <AnimatePresence initial={false}>
-            {isSick && (
-              <motion.div
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-3"
+            <label className="inline-flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={hasHospitalCert}
+                onChange={(e) => setHasHospitalCert(e.target.checked)}
+                className="rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+              />
+              Tôi đã có giấy xác nhận của bệnh viện / cơ sở y tế
+            </label>
+            <div>
+              <label
+                htmlFor="emp-cert-url"
+                className="block text-xs text-slate-600 mb-1"
               >
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-                  <Stethoscope className="w-4 h-4 text-teal-700" />
-                  Giấy xác nhận nghỉ ốm
-                </div>
-                <label className="inline-flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={hasHospitalCert}
-                    onChange={(e) => setHasHospitalCert(e.target.checked)}
-                    className="rounded border-slate-300 text-teal-700 focus:ring-teal-600"
-                  />
-                  Tôi đã có giấy xác nhận của bệnh viện / cơ sở y tế
-                </label>
-                <div>
-                  <label
-                    htmlFor="emp-cert-url"
-                    className="block text-xs text-slate-600 mb-1"
-                  >
-                    Liên kết Google Drive của giấy xác nhận (tuỳ chọn)
-                  </label>
-                  <input
-                    id="emp-cert-url"
-                    type="url"
-                    value={attachmentUrl}
-                    onChange={(e) => setAttachmentUrl(e.target.value)}
-                    placeholder="https://drive.google.com/..."
-                    maxLength={500}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
-                  />
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Hệ thống chỉ lưu liên kết, không tải tệp lên Firebase. Hãy bật
-                    quyền chia sẻ để quản lý mở được.
-                  </p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                Liên kết Google Drive của giấy xác nhận (tuỳ chọn)
+              </label>
+              <input
+                id="emp-cert-url"
+                type="url"
+                value={attachmentUrl}
+                onChange={(e) => setAttachmentUrl(e.target.value)}
+                placeholder="https://drive.google.com/..."
+                maxLength={500}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Hệ thống chỉ lưu liên kết, không tải tệp lên Firebase. Hãy bật
+                quyền chia sẻ để quản lý mở được.
+              </p>
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
@@ -506,10 +410,11 @@ export function EmployeeLeaveRequestForm({
           </div>
 
           <p className="text-[11px] text-slate-500 leading-relaxed">
-            Khi gửi đơn, hệ thống lưu họ tên, email, khoảng ngày nghỉ, lý do và
-            ghi chú của bạn trong Firestore nội bộ của công ty để quản lý duyệt
-            đơn. Không có email thông báo nào được gửi và không có dữ liệu nào
-            được gửi tới dịch vụ quảng cáo hay theo dõi người dùng.
+            Khi gửi đơn, hệ thống lưu họ tên, phòng ban, khoảng ngày nghỉ, lý do,
+            ghi chú và liên kết giấy xác nhận (nếu có) trong Firestore nội bộ của
+            công ty để quản lý duyệt đơn. Không thu thập email, không gửi email
+            thông báo và không có dữ liệu nào được gửi tới dịch vụ quảng cáo hay
+            theo dõi người dùng.
           </p>
 
           <div className="pt-4 border-t border-slate-100 flex items-center justify-end">

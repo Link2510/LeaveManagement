@@ -103,8 +103,8 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
   const monthLabel = `Tháng ${String(viewMonth + 1).padStart(2, '0')} / ${viewYear}`;
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-      <div className="xl:col-span-8 bg-white border border-slate-200 rounded-xl overflow-hidden">
+    <div className="space-y-6">
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <h2 className="text-base font-semibold text-slate-900 whitespace-nowrap">
@@ -268,7 +268,7 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
       </div>
 
       {/* Selected Day Detail Panel */}
-      <aside className="xl:col-span-4 bg-white border border-slate-200 rounded-xl p-6">
+      <aside className="bg-white border border-slate-200 rounded-xl p-6">
         <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
           <div>
             <p className="text-xs text-slate-500">Chi tiết ngày chọn</p>
@@ -311,7 +311,7 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
             Không có nhân sự đăng ký nghỉ vào ngày làm việc này.
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {selectedDayRequests.map((req) => (
               <div
                 key={req.id}

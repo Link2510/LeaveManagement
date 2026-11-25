@@ -21,7 +21,6 @@ import {
   LogIn,
   LogOut,
   Menu,
-  Search,
   Send,
   ShieldCheck,
   Smile,
@@ -38,12 +37,13 @@ import {
   subscribeIsManager,
   subscribeLeaveContacts,
   subscribeLeaveRequests,
+  subscribeLeaveSummaries,
   subscribeManagers,
   subscribeNotifications,
   markAllNotificationsRead,
   markNotificationRead,
   syncAllDailyOffStatuses,
-  syncMissingLookups,
+  syncLeaveSummaries,
 } from './services/firestoreService';
 import {
   FIXED_PERSONAL_LEAVE_DAYS,
@@ -54,6 +54,7 @@ import {
   type EmployeeStats,
   type LeaveRequestContact,
   type LeaveRequestItem,
+  type LeaveSummary,
   type ManagerAccount,
 } from './types/leave';
 import {
@@ -71,14 +72,13 @@ import { HolidayManager } from './components/HolidayManager';
 import { ApprovalHistory } from './components/ApprovalHistory';
 import { AttendanceToday } from './components/AttendanceToday';
 import { EmployeeLeaveRequestForm } from './components/EmployeeLeaveRequestForm';
-import { EmployeeLeaveLookup } from './components/EmployeeLeaveLookup';
 import { LeaveApprovalQueue } from './components/LeaveApprovalQueue';
 import { NotificationsPage } from './components/NotificationsPage';
+import { managerNameForUid } from './utils/managerUtils';
 
 type NavTab =
   | 'attendance'
   | 'employee-request'
-  | 'lookup'
   | 'approvals'
   | 'notifications'
   | 'new-request'
@@ -101,7 +101,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('attendance');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [previewAsEmployee, setPreviewAsEmployee] = useState(false);
-  const [lookupEmail, setLookupEmail] = useState('');
   const [statsYear, setStatsYear] = useState<number>(() => new Date().getFullYear());
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [notifPanelOpen, setNotifPanelOpen] = useState(false);
@@ -116,6 +115,7 @@ export default function App() {
   const [holidays, setHolidays] = useState<CompanyHoliday[]>([]);
   const [requests, setRequests] = useState<LeaveRequestItem[]>([]);
   const [contacts, setContacts] = useState<Record<string, LeaveRequestContact>>({});
+  const [leaveSummaries, setLeaveSummaries] = useState<Record<string, LeaveSummary>>({});
   const [dailyOffEmployeeIds, setDailyOffEmployeeIds] = useState<string[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
@@ -128,8 +128,13 @@ export default function App() {
   const isManagerSignedIn = Boolean(user && isAuthorizedManager);
   const isManagerView = isManagerSignedIn && !previewAsEmployee;
   const showManagerWorkspace = isManagerSignedIn && !previewAsEmployee;
+  const currentManagerName = useMemo(
+    () => managerNameForUid(managers, user?.uid, user?.displayName),
+    [managers, user],
+  );
   const prevManagerWorkspaceRef = useRef<boolean>(false);
   const lastDailyOffSyncRef = useRef<string>('');
+  const lastSummarySyncRef = useRef<string>('');
 
 useEffect(() => {
   console.log('[LOADING TRACE]', {
@@ -251,6 +256,9 @@ useEffect(() => {
     const unsubManagers = subscribeManagers(canReadManagerFirestore, (list) => {
       if (active) setManagers(list);
     });
+    const unsubSummaries = subscribeLeaveSummaries((map) => {
+      if (active) setLeaveSummaries(map);
+    });
 
     let unsubQuotas: (() => void) | undefined;
     if (canReadManagerFirestore) {
@@ -270,15 +278,27 @@ useEffect(() => {
       unsubNotifs();
       unsubContacts();
       unsubManagers();
+      unsubSummaries();
       unsubQuotas?.();
     };
   }, [authReady, managerCheckDone, user, isManagerSignedIn]);
 
   useEffect(() => {
-    if (isManagerSignedIn && requests.length > 0) {
-      void syncMissingLookups(requests, contacts);
-    }
-  }, [isManagerSignedIn, requests, contacts]);
+    if (!isManagerSignedIn || dataLoading || employees.length === 0) return;
+    const signature = `${new Date().getFullYear()}::${employees.length}::${requests
+      .filter((r) => r.status === 'Đã duyệt')
+      .map((r) => `${r.id}:${r.employeeId}:${r.allocations.map((a) => `${a.type}=${a.days}`).join(',')}`)
+      .sort()
+      .join('|')}`;
+    if (signature === lastSummarySyncRef.current) return;
+    lastSummarySyncRef.current = signature;
+    void syncLeaveSummaries(
+      employees,
+      requests,
+      quotas,
+      new Date().getFullYear(),
+    );
+  }, [isManagerSignedIn, dataLoading, employees, requests, quotas]);
 
   // Toast đơn mới tự ẩn sau 12 giây.
   useEffect(() => {
@@ -348,7 +368,6 @@ useEffect(() => {
       const employeeTabs: NavTab[] = [
         'attendance',
         'employee-request',
-        'lookup',
         'holidays',
       ];
       if (!employeeTabs.includes(activeTab)) {
@@ -585,7 +604,6 @@ useEffect(() => {
   }> = [
       { id: 'attendance', label: 'Hôm nay ai đi làm', icon: Smile },
       { id: 'employee-request', label: 'Đăng ký nghỉ phép', icon: Send },
-      { id: 'lookup', label: 'Tra cứu đơn của tôi', icon: Search },
       { id: 'dashboard', label: 'Bảng thống kê', icon: LayoutDashboard, managerOnly: true },
       { id: 'calendar', label: 'Lịch nghỉ tháng', icon: CalendarDays, managerOnly: true },
       {
@@ -618,7 +636,6 @@ useEffect(() => {
   const pageTitleMap: Record<NavTab, string> = {
     attendance: 'Hôm nay ai đi làm',
     'employee-request': 'Nhân viên đăng ký nghỉ phép (không cần đăng nhập)',
-    lookup: 'Tra cứu đơn nghỉ phép của tôi',
     notifications: 'Thông báo của quản lý',
     approvals: 'Duyệt đơn nghỉ phép đang chờ',
     dashboard: 'Tổng quan & Bảng thống kê nghỉ phép',
@@ -753,7 +770,7 @@ useEffect(() => {
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <div className="text-xs font-semibold text-white truncate">
-                  {user?.displayName || 'Quản lý'}
+                  {currentManagerName}
                 </div>
                 <div className="text-[11px] text-white/75 truncate">
                   {isSuperAdmin ? user?.email : 'Tài khoản Quản lý'}
@@ -774,8 +791,8 @@ useEffect(() => {
             <div className="text-xs text-white/85 leading-relaxed">
               <div className="font-semibold text-white">Cổng Nhân viên nội bộ</div>
               <p className="text-[11px] text-white/70 mt-0.5">
-                Đăng ký nghỉ phép, tra cứu đơn của bạn và xem đồng nghiệp đi làm
-                hôm nay — không cần đăng nhập.
+                Đăng ký nghỉ phép và xem đồng nghiệp đi làm hôm nay — không cần
+                đăng nhập.
               </p>
             </div>
 
@@ -1106,6 +1123,8 @@ useEffect(() => {
                       </div>
                     </div>
 
+                    <MonthlyCalendar requests={requests} holidays={holidays} />
+
                     <LeaveStatsTable
                       stats={employeeStats}
                       isAdminView={isManagerView}
@@ -1115,8 +1134,6 @@ useEffect(() => {
                       onChangeYear={setStatsYear}
                       onNavigateEmployees={() => setActiveTab('employees')}
                     />
-
-                    <MonthlyCalendar requests={requests} holidays={holidays} />
                   </>
                 )}
 
@@ -1128,6 +1145,7 @@ useEffect(() => {
                     managerRequests={requests}
                     isManagerView={isManagerView}
                     loading={dataLoading}
+                    summaries={leaveSummaries}
                   />
                 )}
 
@@ -1135,22 +1153,14 @@ useEffect(() => {
                   <EmployeeLeaveRequestForm
                     employees={employees}
                     holidays={holidays}
-                    onGoLookup={(email) => {
-                      setLookupEmail(email);
-                      setActiveTab('lookup');
-                    }}
                   />
-                )}
-
-                {activeTab === 'lookup' && (
-                  <EmployeeLeaveLookup initialEmail={lookupEmail} />
                 )}
 
                 {isManagerView && activeTab === 'approvals' && (
                   <LeaveApprovalQueue
                     requests={requests}
                     contacts={contacts}
-                    adminLabel={user?.displayName || user?.email || 'Quản lý'}
+                    adminLabel={currentManagerName}
                   />
                 )}
 
@@ -1181,7 +1191,7 @@ useEffect(() => {
                     employeeStats={employeeStats}
                     holidays={holidays}
                     currentUserUid={user.uid}
-                    adminLabel={user.displayName || user.email || 'Quản lý'}
+                    adminLabel={currentManagerName}
                     onNavigateDashboard={() => setActiveTab('dashboard')}
                     onNavigateCalendar={() => setActiveTab('calendar')}
                   />
@@ -1199,8 +1209,8 @@ useEffect(() => {
                 {activeTab === 'history' && isManagerView && (
                   <ApprovalHistory
                     requests={requests}
-                    contacts={contacts}
-                    adminLabel={user?.displayName || user?.email || 'Quản lý'}
+                    managers={managers}
+                    adminLabel={currentManagerName}
                   />
                 )}
 

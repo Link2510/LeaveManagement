@@ -128,6 +128,26 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function isValidLeaveSummary(data) {
+      return data.keys().hasAll([
+          'employeeId', 'year', 'annualInitial', 'annualUsed', 'annualRemaining',
+          'personalInitial', 'personalUsed', 'personalRemaining', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'employeeId', 'year', 'annualInitial', 'annualUsed', 'annualRemaining',
+          'personalInitial', 'personalUsed', 'personalRemaining', 'updatedAt'
+        ])
+        && isValidId(data.employeeId)
+        && data.year is number && data.year >= 2020 && data.year <= 2100
+        && data.annualInitial is number && data.annualInitial >= 0 && data.annualInitial <= 60
+        && data.annualUsed is number && data.annualUsed >= 0 && data.annualUsed <= 365
+        && data.annualRemaining is number && data.annualRemaining >= 0 && data.annualRemaining <= 60
+        && data.personalInitial is number && data.personalInitial == 5
+        && data.personalUsed is number && data.personalUsed >= 0 && data.personalUsed <= 365
+        && data.personalRemaining is number && data.personalRemaining >= 0 && data.personalRemaining <= 5
+        && data.updatedAt is timestamp;
+    }
+
     function isValidManager(data) {
       return data.keys().hasAll(['username', 'name', 'role', 'addedBy', 'createdAt'])
         && data.keys().hasOnly(['username', 'name', 'role', 'addedBy', 'createdAt'])
@@ -213,73 +233,6 @@ service cloud.firestore {
         && data.createdAt is timestamp;
     }
 
-    function isValidEmailLookupRequest(data) {
-      return data.keys().hasAll([
-          'requestId', 'emailHash', 'employeeId', 'employeeName', 'department',
-          'startDate', 'endDate', 'workingDays', 'reason', 'status',
-          'allocations', 'createdAt', 'updatedAt'
-        ])
-        && data.keys().hasOnly([
-          'requestId', 'emailHash', 'employeeId', 'employeeName', 'department',
-          'startDate', 'endDate', 'workingDays', 'reason', 'status',
-          'allocations', 'hospitalCertPending', 'attachmentUrl',
-          'rejectionReason', 'processedBy', 'processedAt',
-          'createdAt', 'updatedAt'
-        ])
-        && isValidId(data.requestId)
-        && isValidSha256Id(data.emailHash)
-        && isValidId(data.employeeId)
-        && data.employeeName is string && data.employeeName.size() >= 2 && data.employeeName.size() <= 100
-        && isValidDepartment(data.department)
-        && isValidDateString(data.startDate)
-        && isValidDateString(data.endDate)
-        && data.workingDays is number && data.workingDays >= 0.5 && data.workingDays <= 365
-        && data.reason is string && data.reason.size() >= 2 && data.reason.size() <= 500
-        && data.status is string && data.status in ['Mới tạo', 'Đang chờ duyệt', 'Đã duyệt', 'Từ chối']
-        && isValidAllocations(data.allocations)
-        && (!('hospitalCertPending' in data) || data.hospitalCertPending is bool)
-        && (!('attachmentUrl' in data) || isValidDriveUrl(data.attachmentUrl))
-        && (!('rejectionReason' in data) || (data.rejectionReason is string && data.rejectionReason.size() <= 500))
-        && (!('processedBy' in data) || (data.processedBy is string && data.processedBy.size() <= 120))
-        && (!('processedAt' in data) || (data.processedAt is string && data.processedAt.size() <= 64))
-        && data.createdAt is timestamp
-        && data.updatedAt is timestamp;
-    }
-
-    // Cùng cấu trúc với bản tra cứu theo email, nhưng khóa là SHA-256 của họ tên.
-    function isValidNameLookupRequest(data) {
-      return data.keys().hasAll([
-          'requestId', 'nameHash', 'employeeId', 'employeeName', 'department',
-          'startDate', 'endDate', 'workingDays', 'reason', 'status',
-          'allocations', 'createdAt', 'updatedAt'
-        ])
-        && data.keys().hasOnly([
-          'requestId', 'nameHash', 'employeeId', 'employeeName', 'department',
-          'startDate', 'endDate', 'workingDays', 'reason', 'status',
-          'allocations', 'hospitalCertPending', 'attachmentUrl',
-          'rejectionReason', 'processedBy', 'processedAt',
-          'createdAt', 'updatedAt'
-        ])
-        && isValidId(data.requestId)
-        && isValidSha256Id(data.nameHash)
-        && isValidId(data.employeeId)
-        && data.employeeName is string && data.employeeName.size() >= 2 && data.employeeName.size() <= 100
-        && isValidDepartment(data.department)
-        && isValidDateString(data.startDate)
-        && isValidDateString(data.endDate)
-        && data.workingDays is number && data.workingDays >= 0.5 && data.workingDays <= 365
-        && data.reason is string && data.reason.size() >= 2 && data.reason.size() <= 500
-        && data.status is string && data.status in ['Mới tạo', 'Đang chờ duyệt', 'Đã duyệt', 'Từ chối']
-        && isValidAllocations(data.allocations)
-        && (!('hospitalCertPending' in data) || data.hospitalCertPending is bool)
-        && (!('attachmentUrl' in data) || isValidDriveUrl(data.attachmentUrl))
-        && (!('rejectionReason' in data) || (data.rejectionReason is string && data.rejectionReason.size() <= 500))
-        && (!('processedBy' in data) || (data.processedBy is string && data.processedBy.size() <= 120))
-        && (!('processedAt' in data) || (data.processedAt is string && data.processedAt.size() <= 64))
-        && data.createdAt is timestamp
-        && data.updatedAt is timestamp;
-    }
-
     function isValidNotification(data) {
       return data.keys().hasAll(['recipientType', 'recipientUid', 'requestId', 'title', 'message', 'isRead', 'createdAt'])
         && data.keys().hasOnly(['recipientType', 'recipientUid', 'requestId', 'title', 'message', 'isRead', 'createdAt'])
@@ -326,6 +279,28 @@ service cloud.firestore {
         && incoming().employeeId == existing().employeeId
         && incoming().updatedAt == request.time
         && incoming().diff(existing()).affectedKeys().hasOnly(['annualLeaveInitial', 'personalLeaveInitial', 'updatedAt']);
+      allow delete: if isValidId(employeeId) && isManager();
+    }
+
+    // 2b. Public leave balances for "Hôm nay ai đi làm" (chỉ số ngày, không có PII)
+    match /leaveSummaries/{employeeId} {
+      allow get: if isValidId(employeeId);
+      allow list: if resource.data.year >= 2020;
+      allow create: if isValidId(employeeId)
+        && isManager()
+        && isValidLeaveSummary(incoming())
+        && incoming().employeeId == employeeId
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/employees/$(employeeId));
+      allow update: if isValidId(employeeId)
+        && isManager()
+        && isValidLeaveSummary(incoming())
+        && incoming().employeeId == existing().employeeId
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'year', 'annualInitial', 'annualUsed', 'annualRemaining',
+          'personalInitial', 'personalUsed', 'personalRemaining', 'updatedAt'
+        ]);
       allow delete: if isValidId(employeeId) && isManager();
     }
 
@@ -458,78 +433,6 @@ service cloud.firestore {
         && existsAfter(/databases/$(database)/documents/leaveRequests/$(requestId))
         && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.submitterUid == request.auth.uid;
       allow update: if false;
-      allow delete: if false;
-    }
-
-    // 7. Email-Hash-Scoped Status Lookup (khóa băm email đóng vai trò "mã tra cứu")
-    match /emailLookups/{emailHash}/requests/{requestId} {
-      allow get: if isValidSha256Id(emailHash)
-        && isValidId(requestId)
-        && (isManager() || existing().emailHash == emailHash);
-      allow list: if isManager()
-        || (isValidSha256Id(emailHash) && resource.data.emailHash == emailHash);
-      allow create: if isValidSha256Id(emailHash)
-        && isValidId(requestId)
-        && isValidEmailLookupRequest(incoming())
-        && incoming().emailHash == emailHash
-        && incoming().requestId == requestId
-        && incoming().createdAt == request.time
-        && incoming().updatedAt == request.time
-        && existsAfter(/databases/$(database)/documents/leaveRequests/$(requestId))
-        && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.employeeId == incoming().employeeId
-        && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.emailHash == emailHash
-        && (
-          isManager()
-          || getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.submitterUid == request.auth.uid
-        );
-      allow update: if isValidSha256Id(emailHash)
-        && isValidId(requestId)
-        && isManager()
-        && isValidEmailLookupRequest(incoming())
-        && incoming().emailHash == existing().emailHash
-        && incoming().requestId == existing().requestId
-        && incoming().employeeId == existing().employeeId
-        && incoming().createdAt == existing().createdAt
-        && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly([
-          'status', 'allocations', 'hospitalCertPending', 'rejectionReason', 'processedBy', 'processedAt', 'updatedAt'
-        ]);
-      allow delete: if false;
-    }
-
-    // 7b. Name-Hash-Scoped Status Lookup (tra cứu theo họ tên đã chuẩn hoá dấu)
-    match /nameLookups/{nameHash}/requests/{requestId} {
-      allow get: if isValidSha256Id(nameHash)
-        && isValidId(requestId)
-        && (isManager() || existing().nameHash == nameHash);
-      allow list: if isManager()
-        || (isValidSha256Id(nameHash) && resource.data.nameHash == nameHash);
-      allow create: if isValidSha256Id(nameHash)
-        && isValidId(requestId)
-        && isValidNameLookupRequest(incoming())
-        && incoming().nameHash == nameHash
-        && incoming().requestId == requestId
-        && incoming().createdAt == request.time
-        && incoming().updatedAt == request.time
-        && existsAfter(/databases/$(database)/documents/leaveRequests/$(requestId))
-        && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.employeeId == incoming().employeeId
-        && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.nameHash == nameHash
-        && (
-          isManager()
-          || getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.submitterUid == request.auth.uid
-        );
-      allow update: if isValidSha256Id(nameHash)
-        && isValidId(requestId)
-        && isManager()
-        && isValidNameLookupRequest(incoming())
-        && incoming().nameHash == existing().nameHash
-        && incoming().requestId == existing().requestId
-        && incoming().employeeId == existing().employeeId
-        && incoming().createdAt == existing().createdAt
-        && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly([
-          'status', 'allocations', 'hospitalCertPending', 'rejectionReason', 'processedBy', 'processedAt', 'updatedAt'
-        ]);
       allow delete: if false;
     }
 

@@ -1,20 +1,21 @@
 import { useMemo, useState } from 'react';
 import { Check, ExternalLink, History } from 'lucide-react';
-import type { LeaveRequestContact, LeaveRequestItem } from '../types/leave';
+import type { LeaveRequestItem, ManagerAccount } from '../types/leave';
 import { markHospitalCertReceived } from '../services/firestoreService';
 import { formatDateTimeVN, formatDateVN } from '../utils/dateUtils';
+import { resolveManagerName } from '../utils/managerUtils';
 import { getSafeGoogleDriveHref } from '../utils/urlUtils';
 import { StatusLabel } from './StatusBadge';
 
 interface ApprovalHistoryProps {
   requests: LeaveRequestItem[];
-  contacts?: Record<string, LeaveRequestContact>;
+  managers?: ManagerAccount[];
   adminLabel?: string;
 }
 
 export function ApprovalHistory({
   requests,
-  contacts = {},
+  managers = [],
   adminLabel = 'Quản lý',
 }: ApprovalHistoryProps) {
   const [filter, setFilter] = useState<
@@ -40,8 +41,7 @@ export function ApprovalHistory({
     setActionError('');
     setConfirmingId(req.id);
     try {
-      const contactEmail = contacts[req.id]?.email || '';
-      await markHospitalCertReceived(req, adminLabel, contactEmail);
+      await markHospitalCertReceived(req, adminLabel);
     } catch (err) {
       setActionError(
         err instanceof Error ? err.message : 'Không thể xác nhận giấy xác nhận nằm viện.',
@@ -169,7 +169,7 @@ export function ApprovalHistory({
                       )}
                     </td>
                     <td className="py-3.5 px-6 text-xs text-slate-600 whitespace-nowrap">
-                      <div>{req.processedBy || 'Quản lý'}</div>
+                      <div>{resolveManagerName(req.processedBy, managers)}</div>
                       <div className="text-slate-400 font-mono-num">
                         {formatDateTimeVN(req.processedAt)}
                       </div>

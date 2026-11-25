@@ -90,40 +90,25 @@ export interface LeaveRequestItem {
   rejectionReason?: string;
   processedBy?: string;
   processedAt?: string;
-  emailHash?: string;
-  nameHash?: string;
   submitterUid: string;
   createdAtMs: number;
 }
 
 /**
- * Bản tóm tắt trạng thái đơn nghỉ dùng cho tra cứu công khai.
- * - `emailLookups/{emailHash}/requests` dùng cho tra cứu theo email.
- * - `nameLookups/{nameHash}/requests` dùng cho tra cứu theo họ tên.
+ * Bản tóm tắt quỹ phép còn lại để mọi nhân viên xem nhanh ở tab "Hôm nay ai đi làm".
+ * Chỉ chứa số ngày, không chứa email/lý do nghỉ.
  */
-export interface LeaveLookupRequestItem {
-  requestId: string;
-  emailHash?: string;
-  nameHash?: string;
+export interface LeaveSummary {
   employeeId: string;
-  employeeName: string;
-  department: Department;
-  startDate: string;
-  endDate: string;
-  workingDays: number;
-  reason: string;
-  status: LeaveStatus;
-  allocations: LeaveAllocation[];
-  hospitalCertPending?: boolean;
-  attachmentUrl?: string;
-  rejectionReason?: string;
-  processedBy?: string;
-  processedAt?: string;
-  createdAtMs: number;
+  year: number;
+  annualInitial: number;
+  annualUsed: number;
+  annualRemaining: number;
+  personalInitial: number;
+  personalUsed: number;
+  personalRemaining: number;
+  updatedAtMs: number;
 }
-
-/** @deprecated Dùng `LeaveLookupRequestItem` cho cả tra cứu email và họ tên. */
-export type EmailLookupRequestItem = LeaveLookupRequestItem;
 
 export interface LeaveRequestContact {
   requestId: string;

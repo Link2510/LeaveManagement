@@ -187,7 +187,6 @@ function PendingRequestCard({
         allocations,
         isSick ? hasHospitalCert : false,
         adminLabel,
-        contactEmail || undefined,
         isSick && !hasHospitalCert,
       );
     } catch (err) {
@@ -212,7 +211,6 @@ function PendingRequestCard({
         request,
         rejectionReason.trim(),
         adminLabel,
-        contactEmail || undefined,
       );
     } catch (err) {
       setErrorMsg(
@@ -267,10 +265,10 @@ function PendingRequestCard({
           </div>
           <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 min-w-0">
             <div className="text-[11px] text-slate-500 flex items-center gap-1">
-              <Mail className="w-3 h-3" /> Email liên hệ
+              <Mail className="w-3 h-3" /> Liên hệ
             </div>
             <div className="text-slate-900 mt-0.5 truncate">
-              {contactEmail || 'Chưa có email — nhân viên chỉ tra cứu bằng họ tên.'}
+              {contactEmail || 'Không thu thập email'}
             </div>
           </div>
         </div>

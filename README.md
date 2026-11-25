@@ -1,12 +1,12 @@
 # LeaveManagement – Quản lý nghỉ phép nội bộ
 
-Ứng dụng web (React + Vite + Firebase) để nhân viên **tự đăng ký nghỉ phép không cần đăng nhập**, quản lý duyệt/từ chối đơn, và nhân viên **tra cứu lại đơn của mình** bằng email hoặc họ tên.
+Ứng dụng web (React + Vite + Firebase) để nhân viên **tự đăng ký nghỉ phép không cần đăng nhập**, quản lý duyệt/từ chối đơn, và mọi người xem lịch nghỉ chung. Đơn đã duyệt xuất hiện ngay trên **Lịch nghỉ tháng**, nên không cần mục tra cứu riêng.
 
 - Hosting: `https://mvtpdayoff.web.app` (site `mvtpdayoff`, project `leave-management-vn`)
 - Dữ liệu: Cloud Firestore
 - Đăng nhập Quản lý: Google hoặc username nội bộ; nhân viên gửi đơn dùng **Anonymous Auth** (không bắt người dùng thao tác gì)
 
-> **Không gửi email.** Ứng dụng không gửi email thông báo cho nhân viên (không có Cloud Functions, không dùng dịch vụ email bên thứ ba). Nhân viên tự xem kết quả trong tab **Tra cứu đơn của tôi**.
+> **Không gửi email, không thu thập email.** Ứng dụng không gửi email thông báo (không có Cloud Functions, không dùng dịch vụ email bên thứ ba) và form nhân viên không hỏi email. Kết quả duyệt hiển thị trên lịch nghỉ và danh sách đi làm.
 
 ---
 
@@ -16,12 +16,11 @@
 
 | Mục | Mô tả |
 |---|---|
-| **Đăng ký nghỉ phép** | Chọn họ tên trong danh sách nhân sự, nhập email dùng để tra cứu, chọn khoảng ngày (tự trừ Thứ 7/Chủ nhật, ngày lễ, cộng ngày OT), nhập lý do/ghi chú, đề xuất loại phép. Với **Nghỉ ốm** có thể đánh dấu đã có giấy xác nhận và dán liên kết Google Drive. |
-| **Tra cứu đơn của tôi** | Tra cứu theo **email đã dùng khi đăng ký** hoặc theo **họ tên đầy đủ** (tự chuẩn hoá dấu tiếng Việt: `Nguyen Minh Anh` = `Nguyễn Minh Anh`). Kết quả hiển thị trạng thái, khoảng ngày, số ngày, phân bổ được duyệt, lý do từ chối và người xử lý. |
-| **Hôm nay ai đi làm** | Xem đồng nghiệp đang làm việc / nghỉ phép trong ngày. |
+| **Đăng ký nghỉ phép** | Chọn họ tên trong danh sách nhân sự, chọn khoảng ngày (tự trừ Thứ 7/Chủ nhật, ngày lễ, cộng ngày OT), nhập lý do/ghi chú. Không chọn loại phép — quản lý phân bổ khi duyệt. Có thể đính kèm liên kết Google Drive của giấy xác nhận nghỉ ốm. |
+| **Hôm nay ai đi làm** | Xem đồng nghiệp đang làm việc / nghỉ phép trong ngày. **Bấm vào thẻ một người** để xem số ngày phép năm và nghỉ việc riêng còn lại của người đó. |
 | **Ngày nghỉ công ty** | Xem lịch lễ, nghỉ bù, OT của công ty. |
 
-Đơn gửi xong có trạng thái **Đang chờ duyệt**; quản lý chốt loại phép và phân bổ ngày khi duyệt.
+Đơn gửi xong có trạng thái **Đang chờ duyệt**; quản lý chốt loại phép và phân bổ ngày khi duyệt. Đơn đã duyệt hiện trên lịch nghỉ tháng.
 
 ### Dành cho Quản lý (đăng nhập)
 
@@ -68,7 +67,7 @@ Rules hiện tại cho phép:
 - Nhân viên (kể cả ẩn danh) **chỉ được tạo** đơn `Đang chờ duyệt` với `submitterUid` = uid của chính họ, không được tự ghi `processedBy` / `processedAt` / `rejectionReason`.
 - Nhân viên chỉ `get` được đơn do chính uid của họ gửi (không `list` toàn bộ).
 - Quản lý giữ toàn quyền đọc/ghi như trước.
-- Bản tra cứu `emailLookups` / `nameLookups` được tạo trong cùng batch với đơn, khoá theo SHA-256.
+- `/leaveSummaries` cho phép mọi người đọc **chỉ số ngày còn lại** (không có lý do, email hay thông tin liên hệ).
 
 ### 3.3 Deploy Hosting
 
@@ -88,24 +87,22 @@ firebase deploy --only hosting
 | `/managers/{uid}` | Tài khoản được cấp quyền Quản lý | Quản lý / chính chủ | Super Admin |
 | `/companyHolidays/{id}` | Lễ, nghỉ bù, OT | Công khai | Quản lý |
 | `/leaveRequests/{id}` | Đơn nghỉ phép đầy đủ | Quản lý; nhân viên chỉ đọc đơn của mình | Quản lý; nhân viên chỉ tạo đơn chờ duyệt của mình |
-| `/leaveRequestContacts/{id}` | Email liên hệ của người gửi (PII tách riêng) | Quản lý | Người gửi đơn (tạo) / Quản lý |
-| `/emailLookups/{emailHash}/requests/{id}` | Bản tóm tắt tra cứu theo email | Quản lý hoặc đúng `emailHash` | Quản lý; người gửi (tạo) |
-| `/nameLookups/{nameHash}/requests/{id}` | Bản tóm tắt tra cứu theo họ tên | Quản lý hoặc đúng `nameHash` | Quản lý; người gửi (tạo) |
+| `/leaveSummaries/{employeeId}` | Số ngày phép năm / nghỉ việc riêng còn lại (chỉ số, không PII) | Công khai | Quản lý (tự đồng bộ) |
+| `/leaveRequestContacts/{id}` | Email liên hệ của **đơn cũ** (không còn ghi mới) | Quản lý | Người gửi đơn (tạo) / Quản lý |
 | `/notifications/{id}` | Thông báo trong app (chuông + toast) | Quản lý | Quản lý; nhân viên chỉ tạo thông báo "đơn mới" cho Quản lý |
 | `/dailyOffStatus`, `/monthlyOffStatus` | Chỉ số nghỉ phép không PII cho lịch/điểm danh | Công khai theo ngày/tháng | Quản lý |
 
-`emailHash` = SHA-256 của email (lowercase, trim). `nameHash` = SHA-256 của họ tên đã chuẩn hoá: bỏ dấu tiếng Việt (`đ → d`), lowercase, gộp khoảng trắng.
+`/leaveSummaries` do app quản lý tự tính lại khi danh sách đơn đã duyệt thay đổi; chỉ chứa `employeeId`, năm và các con số ngày.
 
 ---
 
 ## 5. Giới hạn & đánh đổi cần biết
 
 1. **Không có đăng nhập ⇒ không xác thực được danh tính.** Nhân viên chọn tên mình trong danh sách, nên về lý thuyết một người có thể gửi đơn dưới tên người khác. Đây là đánh đổi có chủ ý để không phải cấp tài khoản cho toàn bộ nhân viên. Nếu cần chặt hơn: bật đăng nhập email/Google cho nhân viên và đổi rules sang so khớp `token.email`.
-2. **Tra cứu theo họ tên là "bí mật bằng họ tên".** Ai biết đúng họ tên đầy đủ đều xem được đơn của người đó (kể cả lý do từ chối). Firestore rules không thể vừa cho list theo khoá bí mật vừa chặn người biết khoá. Muốn tắt: bỏ khối `nameLookups` trong `firestore.rules`, bỏ ghi `nameLookups` trong `firestoreService.ts`, và ẩn tab "Theo họ tên".
-3. **Trùng họ tên** sẽ cho kết quả gộp của tất cả nhân sự cùng tên.
-4. Đơn cũ (trước khi bật tính năng) chỉ có bản tra cứu sau khi quản lý đăng nhập một lần (hàm `syncMissingLookups` backfill tối đa 20 đơn mỗi lượt).
-5. File đính kèm chỉ là **liên kết Google Drive**; app không upload tệp lên Firebase.
-6. **Không có email thông báo.** Muốn có email tự động phải thêm Cloud Functions (gói Blaze) + dịch vụ gửi mail; hiện tại chủ động không dùng. Thông báo trong app (chuông + toast) chỉ đến khi quản lý đang mở app và đã đăng nhập; không có push khi app đóng.
+2. **Không có tra cứu trạng thái đơn.** Đơn chờ duyệt/từ chối không hiển thị công khai; chỉ đơn **đã duyệt** mới lên lịch nghỉ tháng. Muốn xem trạng thái, nhân viên hỏi quản lý.
+3. **Số ngày còn lại là dữ liệu tổng hợp.** `/leaveSummaries` do quản lý đồng bộ khi mở app; nếu chưa có quản lý nào mở app sau khi duyệt đơn, thẻ quỹ phép có thể chậm cập nhật.
+4. File đính kèm chỉ là **liên kết Google Drive**; app không upload tệp lên Firebase.
+5. **Không có email thông báo.** Muốn có email tự động phải thêm Cloud Functions (gói Blaze) + dịch vụ gửi mail; hiện tại chủ động không dùng. Thông báo trong app (chuông + toast) chỉ đến khi quản lý đang mở app và đã đăng nhập; không có push khi app đóng.
 
 ---
 
@@ -113,7 +110,7 @@ firebase deploy --only hosting
 
 **App gửi gì ra ngoài máy?**
 
-- Chỉ dữ liệu tới **Cloud Firestore** của project `leave-management-vn` (Google Firebase): họ tên, phòng ban, email, khoảng ngày nghỉ, số ngày, lý do, ghi chú, liên kết Drive (nếu có), trạng thái duyệt, người xử lý.
+- Chỉ dữ liệu tới **Cloud Firestore** của project `leave-management-vn` (Google Firebase): họ tên, phòng ban, khoảng ngày nghỉ, số ngày, lý do, ghi chú, liên kết Drive (nếu có), trạng thái duyệt, người xử lý, và số ngày phép còn lại.
 - **Không** gửi email, không gọi dịch vụ bên thứ ba nào. Không có Google Analytics, không telemetry, không tracking pixel, không quảng cáo, không đọc clipboard, không chụp màn hình, không đọc file trên máy.
 
 **Thông báo trong app** (chuông + toast) chỉ là document trong `/notifications` của Firestore, đọc realtime khi quản lý đăng nhập. Không có push notification, không đăng ký service worker, không lấy token thiết bị.
@@ -125,9 +122,9 @@ firebase deploy --only hosting
 
 **Ai đọc được?**
 
-- Quản lý đọc được đơn đầy đủ + email liên hệ.
+- Quản lý đọc được đơn đầy đủ + email liên hệ của đơn cũ (nếu có).
 - Nhân viên chỉ đọc được đơn của chính uid ẩn danh đã tạo.
-- Bất kỳ ai biết đúng **email** hoặc **họ tên đầy đủ** đều tra cứu được bản tóm tắt (trạng thái, ngày, lý do, lý do từ chối) — xem mục 5.
+- Mọi người đọc được `/leaveSummaries`: **chỉ** mã nhân sự, năm và số ngày đã dùng / còn lại. Không có lý do nghỉ, email hay thông tin liên hệ.
 - `dailyOffStatus` / `monthlyOffStatus` chỉ chứa ID nhân sự + ngày nghỉ, không có lý do.
 
 **Cách tự kiểm chứng:**
@@ -149,9 +146,10 @@ cat firestore.rules
 
 | File | Vai trò |
 |---|---|
-| `src/components/EmployeeLeaveRequestForm.tsx` | Form nhân viên tự gửi đơn (không đăng nhập) |
-| `src/components/EmployeeLeaveLookup.tsx` | Tra cứu theo email / họ tên |
+| `src/components/EmployeeLeaveRequestForm.tsx` | Form nhân viên tự gửi đơn (không đăng nhập, không email, không chọn loại phép) |
+| `src/components/AttendanceToday.tsx` | Danh sách đi làm hôm nay + popup quỹ phép còn lại |
 | `src/components/LeaveApprovalQueue.tsx` | Hàng đợi duyệt đơn của quản lý |
-| `src/services/firestoreService.ts` | `submitEmployeeLeaveRequest`, `lookupLeaveRequestsByEmail`, `lookupLeaveRequestsByName`, `syncMissingLookups`, cập nhật lookup khi duyệt/từ chối |
-| `src/utils/hashUtils.ts` | `sha256Email`, `normalizePersonName`, `sha256PersonName` |
-| `firestore.rules` | Quy tắc cho self-service + tra cứu |
+| `src/components/ApprovalHistory.tsx` | Lịch sử duyệt; hiển thị tên quản lý thật thay cho username/email |
+| `src/services/firestoreService.ts` | `submitEmployeeLeaveRequest`, duyệt/từ chối, `syncLeaveSummaries`, đồng bộ trạng thái ngày/tháng |
+| `src/utils/managerUtils.ts` | `managerNameForUid`, `resolveManagerName` — quy đổi uid/username cũ sang tên quản lý |
+| `firestore.rules` | Quy tắc cho self-service + `/leaveSummaries` công khai |
