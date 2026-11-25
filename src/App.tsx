@@ -258,8 +258,6 @@ useEffect(() => {
       ) {
         setActiveTab('attendance');
       }
-    } else if (!wasManager && showManagerWorkspace && activeTab === 'attendance') {
-      setActiveTab('dashboard');
     }
   }, [showManagerWorkspace, activeTab]);
 
