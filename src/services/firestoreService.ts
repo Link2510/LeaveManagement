@@ -22,6 +22,7 @@ import {
 import {
   ADMIN_EMAIL,
   db,
+  ensureEmployeeAnonymousSession,
   handleFirestoreError,
   managerCreationAuth,
   OperationType,
@@ -787,6 +788,156 @@ export async function createManagerAllocatedLeaveRequest(input: {
     return reqId;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, `leaveRequests/${reqId}`);
+  }
+}
+
+export async function createEmployeeLeaveRequest(input: {
+  employeeId: string;
+  employeeName: string;
+  department: Department;
+  email: string;
+  startDate: string;
+  endDate: string;
+  workingDays: number;
+  reason: string;
+  note: string;
+  hasHospitalCert: boolean;
+  attachmentName?: string;
+}): Promise<string> {
+  const reqId = generateSafeId('req');
+
+  try {
+    // 1. Đảm bảo người gửi sử dụng phiên Anonymous Authentication.
+    const sessionUser = await ensureEmployeeAnonymousSession();
+
+    if (!sessionUser.isAnonymous) {
+      throw new Error(
+        'Phiên quản lý đang đăng nhập. Vui lòng đăng xuất hoặc mở cửa sổ ẩn danh trước khi gửi đơn nhân viên.',
+      );
+    }
+
+    // 2. Chuẩn hóa và kiểm tra dữ liệu.
+    const cleanEmail = clampString(input.email, 160).toLowerCase();
+    const cleanEmployeeId = clampString(input.employeeId, 128);
+    const cleanEmployeeName = clampString(input.employeeName, 100);
+    const cleanReason = clampString(input.reason, 500);
+    const cleanNote = clampString(input.note || '', 500);
+    const cleanStartDate = clampString(input.startDate, 10);
+    const cleanEndDate = clampString(input.endDate, 10);
+    const cleanAttachmentName = clampString(input.attachmentName || '', 180);
+    const workingDays = Number(input.workingDays);
+
+    if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(cleanEmail)) {
+      throw new Error('Địa chỉ email không hợp lệ.');
+    }
+
+    if (!cleanEmployeeId || !cleanEmployeeName) {
+      throw new Error('Vui lòng chọn nhân viên hợp lệ từ danh sách.');
+    }
+
+    if (cleanReason.length < 2) {
+      throw new Error('Vui lòng nhập lý do nghỉ phép.');
+    }
+
+    if (
+      !Number.isFinite(workingDays) ||
+      workingDays < 0.5 ||
+      workingDays > 365
+    ) {
+      throw new Error('Số ngày nghỉ không hợp lệ.');
+    }
+
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(cleanStartDate) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(cleanEndDate) ||
+      cleanEndDate < cleanStartDate
+    ) {
+      throw new Error('Khoảng thời gian nghỉ phép không hợp lệ.');
+    }
+
+    // 3. Tạo mã SHA-256 từ email.
+    const emailHash = await sha256Email(cleanEmail);
+
+    // 4. Chuẩn bị dữ liệu đơn nghỉ phép.
+    const requestPayload = {
+      employeeId: cleanEmployeeId,
+      employeeName: cleanEmployeeName,
+      department: input.department,
+      startDate: cleanStartDate,
+      endDate: cleanEndDate,
+      workingDays,
+      reason: cleanReason,
+      note: cleanNote,
+      status: 'Đang chờ duyệt' as const,
+      allocations: [] as LeaveAllocation[],
+      hasHospitalCert: Boolean(input.hasHospitalCert),
+      attachmentName: cleanAttachmentName,
+      emailHash,
+      submitterUid: sessionUser.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    // 5. Chuẩn bị dữ liệu tra cứu theo email.
+    const lookupPayload = {
+      requestId: reqId,
+      emailHash,
+      employeeId: cleanEmployeeId,
+      employeeName: cleanEmployeeName,
+      department: input.department,
+      startDate: cleanStartDate,
+      endDate: cleanEndDate,
+      workingDays,
+      reason: cleanReason,
+      status: 'Đang chờ duyệt' as const,
+      allocations: [] as LeaveAllocation[],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    // 6. Ghi đồng thời cả 4 tài liệu.
+    const batch = writeBatch(db);
+
+    batch.set(doc(db, 'leaveRequests', reqId), requestPayload);
+
+    batch.set(doc(db, 'leaveRequestContacts', reqId), {
+      requestId: reqId,
+      email: cleanEmail,
+      submitterUid: sessionUser.uid,
+      createdAt: serverTimestamp(),
+    });
+
+    batch.set(
+      doc(db, 'emailLookups', emailHash, 'requests', reqId),
+      lookupPayload,
+    );
+
+    // ID thông báo phải trùng ID đơn theo Firestore Rules.
+    batch.set(doc(db, 'notifications', reqId), {
+      recipientType: 'admin',
+      recipientUid: 'admin',
+      requestId: reqId,
+      title: `Đơn nghỉ phép mới: ${cleanEmployeeName}`,
+      message: `${cleanEmployeeName} vừa gửi đơn nghỉ phép từ ${cleanStartDate} đến ${cleanEndDate}.`,
+      isRead: false,
+      createdAt: serverTimestamp(),
+    });
+
+    await batch.commit();
+
+    return reqId;
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Phiên quản lý')) {
+      throw error;
+    }
+
+    handleFirestoreError(
+      error,
+      OperationType.CREATE,
+      `leaveRequests/${reqId}`,
+    );
+
+    throw error;
   }
 }
 

@@ -53,9 +53,11 @@ import { EmployeeManager } from './components/EmployeeManager';
 import { HolidayManager } from './components/HolidayManager';
 import { ApprovalHistory } from './components/ApprovalHistory';
 import { AttendanceToday } from './components/AttendanceToday';
+import { EmployeeLeaveRequestForm } from './components/EmployeeLeaveRequestForm';
 
 type NavTab =
   | 'attendance'
+  | 'employee-request'
   | 'new-request'
   | 'holidays'
   | 'dashboard'
@@ -99,21 +101,21 @@ export default function App() {
   const prevManagerWorkspaceRef = useRef<boolean>(false);
   const lastDailyOffSyncRef = useRef<string>('');
 
-useEffect(() => {
-  console.log('[LOADING TRACE]', {
+  useEffect(() => {
+    console.log('[LOADING TRACE]', {
+      dataLoading,
+      employeesCount: employees.length,
+      authReady,
+      managerCheckDone,
+      isManagerSignedIn,
+    });
+  }, [
     dataLoading,
-    employeesCount: employees.length,
+    employees.length,
     authReady,
     managerCheckDone,
     isManagerSignedIn,
-  });
-}, [
-  dataLoading,
-  employees.length,
-  authReady,
-  managerCheckDone,
-  isManagerSignedIn,
-]);
+  ]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (nextUser) => {
@@ -126,7 +128,7 @@ useEffect(() => {
   useEffect(() => {
     if (!authReady) return;
 
-    if (!user) {
+    if (!user || user.isAnonymous) {
       setIsAuthorizedManager(false);
       setManagerCheckDone(true);
       setAuthError('');
@@ -163,18 +165,18 @@ useEffect(() => {
     const canReadManagerFirestore = isManagerSignedIn;
 
     const init = async () => {
-  try {
-    if (canReadManagerFirestore && user) {
-      await seedInitialDataIfNeeded(true, user.uid);
-    }
-  } catch (error) {
-    console.error('Không thể khởi tạo dữ liệu ban đầu:', error);
-  } finally {
-    if (active) {
-      setDataLoading(false);
-    }
-  }
-}; void init();
+      try {
+        if (canReadManagerFirestore && user) {
+          await seedInitialDataIfNeeded(true, user.uid);
+        }
+      } catch (error) {
+        console.error('Không thể khởi tạo dữ liệu ban đầu:', error);
+      } finally {
+        if (active) {
+          setDataLoading(false);
+        }
+      }
+    }; void init();
 
     const todayKey = getTodayKey();
     const unsubEmployees = subscribeEmployees((list) => {
@@ -254,7 +256,8 @@ useEffect(() => {
     if (!showManagerWorkspace) {
       if (
         activeTab !== 'attendance' &&
-        activeTab !== 'holidays'
+        activeTab !== 'holidays' &&
+        activeTab !== 'employee-request'
       ) {
         setActiveTab('attendance');
       }
@@ -460,6 +463,11 @@ useEffect(() => {
     managerOnly?: boolean;
   }> = [
       { id: 'attendance', label: 'Hôm nay ai đi làm', icon: Smile },
+      {
+        id: 'employee-request',
+        label: 'Đăng ký nghỉ phép',
+        icon: FilePlus2,
+      },
       { id: 'dashboard', label: 'Bảng thống kê', icon: LayoutDashboard, managerOnly: true },
       { id: 'calendar', label: 'Lịch nghỉ tháng', icon: CalendarDays, managerOnly: true },
       {
@@ -477,6 +485,7 @@ useEffect(() => {
 
   const pageTitleMap: Record<NavTab, string> = {
     attendance: 'Hôm nay ai đi làm',
+    'employee-request': 'Đăng ký nghỉ phép',
     dashboard: 'Tổng quan & Bảng thống kê nghỉ phép',
     calendar: 'Lịch nghỉ tháng toàn công ty',
     'new-request': 'Đăng ký & phân bổ ngày nghỉ cho nhân viên',
@@ -882,6 +891,14 @@ useEffect(() => {
                     adminLabel={user.displayName || user.email || 'Quản lý'}
                     onNavigateDashboard={() => setActiveTab('dashboard')}
                     onNavigateCalendar={() => setActiveTab('calendar')}
+                  />
+                )}
+
+                {activeTab === 'employee-request' && (
+                  <EmployeeLeaveRequestForm
+                    employees={employees}
+                    holidays={holidays}
+                    isManagerSession={isManagerSignedIn}
                   />
                 )}
 

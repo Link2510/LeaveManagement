@@ -28,8 +28,13 @@ service cloud.firestore {
     }
 
     function isSignedIn() {
-      return request.auth != null;
-    }
+  return request.auth != null;
+}
+
+function isAnonymousUser() {
+  return isSignedIn()
+    && request.auth.token.firebase.sign_in_provider == 'anonymous';
+}
 
     function isVerifiedUser() {
       return isSignedIn() && request.auth.token.email_verified == true;
@@ -200,6 +205,20 @@ service cloud.firestore {
         && isValidId(data.submitterUid)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
+    }
+
+    function isValidEmployeeSubmittedRequest(data) {
+      return isAnonymousUser()
+        && isValidLeaveRequest(data)
+        && data.keys().hasAll(['emailHash'])
+        && data.submitterUid == request.auth.uid
+        && data.status == 'Đang chờ duyệt'
+        && data.allocations.size() == 0
+        && !('processedBy' in data)
+        && !('processedAt' in data)
+        && !('rejectionReason' in data)
+        && !('hospitalCertPending' in data)
+        && !('attachmentUrl' in data);
     }
 
     function isValidLeaveRequestContact(data) {
@@ -374,11 +393,23 @@ service cloud.firestore {
       allow get: if isValidId(requestId) && isManager();
       allow list: if isManager();
       allow create: if isValidId(requestId)
-        && isManager()
-        && isValidLeaveRequest(incoming())
+        && (
+          (
+            isManager()
+            && isValidLeaveRequest(incoming())
+          )
+          ||
+          (
+            isValidEmployeeSubmittedRequest(incoming())
+            && exists(/databases/$(database)/documents/employees/$(incoming().employeeId))
+            && get(/databases/$(database)/documents/employees/$(incoming().employeeId)).data.name == incoming().employeeName
+            && get(/databases/$(database)/documents/employees/$(incoming().employeeId)).data.department == incoming().department
+          )
+        )
+        && exists(/databases/$(database)/documents/employees/$(incoming().employeeId))
         && incoming().createdAt == request.time
-        && incoming().updatedAt == request.time
-        && exists(/databases/$(database)/documents/employees/$(incoming().employeeId));
+        && incoming().updatedAt == request.time;
+
       allow update: if isValidId(requestId)
         && isManager()
         && isValidLeaveRequest(incoming())
@@ -396,12 +427,21 @@ service cloud.firestore {
     match /leaveRequestContacts/{requestId} {
       allow get: if isValidId(requestId) && isManager();
       allow list: if isManager();
-      allow create: if isValidId(requestId)
-        && isManager()
+            allow create: if isValidId(requestId)
         && isValidLeaveRequestContact(incoming())
         && incoming().requestId == requestId
         && incoming().createdAt == request.time
-        && existsAfter(/databases/$(database)/documents/leaveRequests/$(requestId));
+        && existsAfter(/databases/$(database)/documents/leaveRequests/$(requestId))
+        && (
+          isManager()
+          ||
+          (
+            isAnonymousUser()
+            && incoming().submitterUid == request.auth.uid
+            && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.submitterUid == request.auth.uid
+            && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.emailHash != null
+          )
+        );
       allow update: if false;
       allow delete: if false;
     }
@@ -413,16 +453,29 @@ service cloud.firestore {
         && (isManager() || existing().emailHash == emailHash);
       allow list: if isManager()
         || (isValidSha256Id(emailHash) && resource.data.emailHash == emailHash);
-      allow create: if isValidSha256Id(emailHash)
+            allow create: if isValidSha256Id(emailHash)
         && isValidId(requestId)
-        && isManager()
         && isValidEmailLookupRequest(incoming())
         && incoming().emailHash == emailHash
         && incoming().requestId == requestId
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
         && existsAfter(/databases/$(database)/documents/leaveRequests/$(requestId))
-        && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.employeeId == incoming().employeeId;
+        && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.employeeId == incoming().employeeId
+        && (
+          isManager()
+          ||
+          (
+            isAnonymousUser()
+            && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.submitterUid == request.auth.uid
+            && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.emailHash == emailHash
+            && incoming().status == 'Đang chờ duyệt'
+            && incoming().allocations.size() == 0
+            && !('rejectionReason' in incoming())
+            && !('processedBy' in incoming())
+            && !('processedAt' in incoming())
+          )
+        );
       allow update: if isValidSha256Id(emailHash)
         && isValidId(requestId)
         && isManager()
@@ -442,18 +495,36 @@ service cloud.firestore {
     match /notifications/{notificationId} {
       allow get: if isValidId(notificationId) && isManager();
       allow list: if isManager();
-      allow create: if isValidId(notificationId)
-        && isManager()
-        && isValidNotification(incoming())
-        && incoming().isRead == false
-        && incoming().createdAt == request.time
+            allow create: if isValidId(notificationId)
         && (
           (
-            incoming().recipientType == 'admin'
-            && incoming().recipientUid == 'admin'
-            && existsAfter(/databases/$(database)/documents/leaveRequests/$(incoming().requestId))
+            isManager()
+            && isValidNotification(incoming())
+            && incoming().isRead == false
+            && incoming().createdAt == request.time
+            && (
+              (
+                incoming().recipientType == 'admin'
+                && incoming().recipientUid == 'admin'
+                && existsAfter(/databases/$(database)/documents/leaveRequests/$(incoming().requestId))
+              )
+              || incoming().recipientType == 'employee'
+            )
           )
-          || incoming().recipientType == 'employee'
+          ||
+          (
+            isAnonymousUser()
+            && isValidNotification(incoming())
+            && incoming().recipientType == 'admin'
+            && incoming().recipientUid == 'admin'
+            && incoming().isRead == false
+            && incoming().createdAt == request.time
+            && notificationId == incoming().requestId
+            && !exists(/databases/$(database)/documents/leaveRequests/$(incoming().requestId))
+            && existsAfter(/databases/$(database)/documents/leaveRequests/$(incoming().requestId))
+            && getAfter(/databases/$(database)/documents/leaveRequests/$(incoming().requestId)).data.submitterUid == request.auth.uid
+            && getAfter(/databases/$(database)/documents/leaveRequests/$(incoming().requestId)).data.status == 'Đang chờ duyệt'
+          )
         );
       allow update: if isValidId(notificationId)
         && isManager()

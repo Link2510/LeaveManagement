@@ -1,5 +1,9 @@
 import { getApps, initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInAnonymously,
+} from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -15,6 +19,15 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+export async function ensureEmployeeAnonymousSession() {
+  if (auth.currentUser) {
+    return auth.currentUser;
+  }
+
+  const credential = await signInAnonymously(auth);
+  return credential.user;
+}
 
 export const ADMIN_EMAIL = 'mynamelink1998@gmail.com';
 
