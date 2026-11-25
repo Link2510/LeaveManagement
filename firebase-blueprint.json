@@ -13,7 +13,10 @@
         },
         "department": {
           "type": "string",
-          "enum": ["Quản lý", "Nhân sự"],
+          "enum": [
+            "Quản lý",
+            "Nhân sự"
+          ],
           "description": "Department name."
         },
         "avatarPreset": {
@@ -35,7 +38,12 @@
           "format": "date-time"
         }
       },
-      "required": ["name", "department", "createdAt", "updatedAt"]
+      "required": [
+        "name",
+        "department",
+        "createdAt",
+        "updatedAt"
+      ]
     },
     "EmployeeQuota": {
       "title": "EmployeeQuota",
@@ -59,7 +67,12 @@
           "format": "date-time"
         }
       },
-      "required": ["employeeId", "annualLeaveInitial", "personalLeaveInitial", "updatedAt"]
+      "required": [
+        "employeeId",
+        "annualLeaveInitial",
+        "personalLeaveInitial",
+        "updatedAt"
+      ]
     },
     "Manager": {
       "title": "Manager",
@@ -78,7 +91,9 @@
         },
         "role": {
           "type": "string",
-          "enum": ["manager"]
+          "enum": [
+            "manager"
+          ]
         },
         "addedBy": {
           "type": "string",
@@ -90,7 +105,13 @@
           "format": "date-time"
         }
       },
-      "required": ["email", "name", "role", "addedBy", "createdAt"]
+      "required": [
+        "email",
+        "name",
+        "role",
+        "addedBy",
+        "createdAt"
+      ]
     },
     "CompanyHoliday": {
       "title": "CompanyHoliday",
@@ -110,7 +131,12 @@
         },
         "category": {
           "type": "string",
-          "enum": ["Lễ/Tết", "Nghỉ bù", "Ngày làm việc bù", "Nghỉ công ty"]
+          "enum": [
+            "Lễ/Tết",
+            "Nghỉ bù",
+            "Ngày làm việc bù",
+            "Nghỉ công ty"
+          ]
         },
         "year": {
           "type": "number"
@@ -128,11 +154,19 @@
           "format": "date-time"
         }
       },
-      "required": ["date", "title", "category", "year", "note", "createdAt", "updatedAt"]
+      "required": [
+        "date",
+        "title",
+        "category",
+        "year",
+        "note",
+        "createdAt",
+        "updatedAt"
+      ]
     },
     "LeaveRequest": {
       "title": "LeaveRequest",
-      "description": "Leave registration and approval workflow document (non-PII fields, readable only by Managers).",
+      "description": "Leave registration and approval workflow document (readable only by Managers; employees may create and read only their own).",
       "type": "object",
       "properties": {
         "employeeId": {
@@ -148,7 +182,10 @@
         },
         "department": {
           "type": "string",
-          "enum": ["Quản lý", "Nhân sự"]
+          "enum": [
+            "Quản lý",
+            "Nhân sự"
+          ]
         },
         "startDate": {
           "type": "string",
@@ -176,7 +213,12 @@
         },
         "status": {
           "type": "string",
-          "enum": ["Mới tạo", "Đang chờ duyệt", "Đã duyệt", "Từ chối"]
+          "enum": [
+            "Mới tạo",
+            "Đang chờ duyệt",
+            "Đã duyệt",
+            "Từ chối"
+          ]
         },
         "allocations": {
           "type": "array",
@@ -208,18 +250,6 @@
         "processedAt": {
           "type": "string",
           "maxLength": 64
-        },
-        "emailHash": {
-          "type": "string",
-          "minLength": 64,
-          "maxLength": 64,
-          "pattern": "^[a-f0-9]{64}$"
-        },
-        "nameHash": {
-          "type": "string",
-          "minLength": 64,
-          "maxLength": 64,
-          "pattern": "^[a-f0-9]{64}$"
         },
         "submitterUid": {
           "type": "string",
@@ -256,7 +286,7 @@
     },
     "LeaveRequestContact": {
       "title": "LeaveRequestContact",
-      "description": "Isolated PII email contact for a leave request, readable only by Managers.",
+      "description": "Legacy PII email contact for older leave requests; no longer written by the app. Readable only by Managers.",
       "type": "object",
       "properties": {
         "requestId": {
@@ -281,194 +311,58 @@
           "format": "date-time"
         }
       },
-      "required": ["requestId", "email", "submitterUid", "createdAt"]
-    },
-    "EmailLookupRequest": {
-      "title": "EmailLookupRequest",
-      "description": "Private email-hash-scoped status summary enabling employees to check only their own leave requests without exposing other employees' leave schedules.",
-      "type": "object",
-      "properties": {
-        "requestId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "emailHash": {
-          "type": "string",
-          "minLength": 64,
-          "maxLength": 64,
-          "pattern": "^[a-f0-9]{64}$"
-        },
-        "employeeId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "employeeName": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 100
-        },
-        "department": {
-          "type": "string",
-          "enum": ["Quản lý", "Nhân sự"]
-        },
-        "startDate": {
-          "type": "string",
-          "minLength": 10,
-          "maxLength": 10,
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-        },
-        "endDate": {
-          "type": "string",
-          "minLength": 10,
-          "maxLength": 10,
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-        },
-        "workingDays": {
-          "type": "number"
-        },
-        "reason": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 500
-        },
-        "status": {
-          "type": "string",
-          "enum": ["Mới tạo", "Đang chờ duyệt", "Đã duyệt", "Từ chối"]
-        },
-        "allocations": {
-          "type": "array"
-        },
-        "hospitalCertPending": {
-          "type": "boolean"
-        },
-        "attachmentUrl": {
-          "type": "string",
-          "maxLength": 500,
-          "pattern": "^https://(drive|docs)\\.google\\.com/[^\\s]+$"
-        },
-        "rejectionReason": {
-          "type": "string",
-          "maxLength": 500
-        },
-        "processedBy": {
-          "type": "string",
-          "maxLength": 120
-        },
-        "processedAt": {
-          "type": "string",
-          "maxLength": 64
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
-      },
       "required": [
         "requestId",
-        "emailHash",
-        "employeeId",
-        "employeeName",
-        "department",
-        "startDate",
-        "endDate",
-        "workingDays",
-        "reason",
-        "status",
-        "allocations",
-        "createdAt",
-        "updatedAt"
+        "email",
+        "submitterUid",
+        "createdAt"
       ]
     },
-    "NameLookupRequest": {
-      "title": "NameLookupRequest",
-      "description": "Name-hash-scoped status summary enabling employees to look up their leave requests by full name without exposing other employees' email addresses.",
+    "LeaveSummary": {
+      "title": "LeaveSummary",
+      "description": "Public numeric leave balance per employee (annual/personal initial, used, remaining). Contains no reasons, notes, emails or contact details.",
       "type": "object",
       "properties": {
-        "requestId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "nameHash": {
-          "type": "string",
-          "minLength": 64,
-          "maxLength": 64,
-          "pattern": "^[a-f0-9]{64}$"
-        },
         "employeeId": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
-        "employeeName": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 100
+        "year": {
+          "type": "number",
+          "minimum": 2020,
+          "maximum": 2100
         },
-        "department": {
-          "type": "string",
-          "enum": ["Quản lý", "Nhân sự"]
+        "annualInitial": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 60
         },
-        "startDate": {
-          "type": "string",
-          "minLength": 10,
-          "maxLength": 10,
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        "annualUsed": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 365
         },
-        "endDate": {
-          "type": "string",
-          "minLength": 10,
-          "maxLength": 10,
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        "annualRemaining": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 60
         },
-        "workingDays": {
-          "type": "number"
+        "personalInitial": {
+          "type": "number",
+          "minimum": 5,
+          "maximum": 5
         },
-        "reason": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 500
+        "personalUsed": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 365
         },
-        "status": {
-          "type": "string",
-          "enum": ["Mới tạo", "Đang chờ duyệt", "Đã duyệt", "Từ chối"]
-        },
-        "allocations": {
-          "type": "array"
-        },
-        "hospitalCertPending": {
-          "type": "boolean"
-        },
-        "attachmentUrl": {
-          "type": "string",
-          "maxLength": 500,
-          "pattern": "^https://(drive|docs)\\.google\\.com/[^\\s]+$"
-        },
-        "rejectionReason": {
-          "type": "string",
-          "maxLength": 500
-        },
-        "processedBy": {
-          "type": "string",
-          "maxLength": 120
-        },
-        "processedAt": {
-          "type": "string",
-          "maxLength": 64
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
+        "personalRemaining": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5
         },
         "updatedAt": {
           "type": "string",
@@ -476,18 +370,14 @@
         }
       },
       "required": [
-        "requestId",
-        "nameHash",
         "employeeId",
-        "employeeName",
-        "department",
-        "startDate",
-        "endDate",
-        "workingDays",
-        "reason",
-        "status",
-        "allocations",
-        "createdAt",
+        "year",
+        "annualInitial",
+        "annualUsed",
+        "annualRemaining",
+        "personalInitial",
+        "personalUsed",
+        "personalRemaining",
         "updatedAt"
       ]
     },
@@ -510,7 +400,11 @@
           "format": "date-time"
         }
       },
-      "required": ["date", "offEmployeeIds", "updatedAt"]
+      "required": [
+        "date",
+        "offEmployeeIds",
+        "updatedAt"
+      ]
     },
     "MonthlyOffStatus": {
       "title": "MonthlyOffStatus",
@@ -531,7 +425,11 @@
           "format": "date-time"
         }
       },
-      "required": ["month", "entries", "updatedAt"]
+      "required": [
+        "month",
+        "entries",
+        "updatedAt"
+      ]
     },
     "Notification": {
       "title": "Notification",
@@ -540,7 +438,10 @@
       "properties": {
         "recipientType": {
           "type": "string",
-          "enum": ["admin", "employee"]
+          "enum": [
+            "admin",
+            "employee"
+          ]
         },
         "recipientUid": {
           "type": "string",
@@ -572,53 +473,77 @@
           "format": "date-time"
         }
       },
-      "required": ["recipientType", "recipientUid", "requestId", "title", "message", "isRead", "createdAt"]
+      "required": [
+        "recipientType",
+        "recipientUid",
+        "requestId",
+        "title",
+        "message",
+        "isRead",
+        "createdAt"
+      ]
     }
   },
   "firestore": {
     "/employees/{employeeId}": {
-      "schema": { "$ref": "#/entities/Employee" },
+      "schema": {
+        "$ref": "#/entities/Employee"
+      },
       "description": "Employee directory names, departments, and avatar presets."
     },
     "/employeeQuotas/{employeeId}": {
-      "schema": { "$ref": "#/entities/EmployeeQuota" },
+      "schema": {
+        "$ref": "#/entities/EmployeeQuota"
+      },
       "description": "Manager-only annual leave and fixed 5-day personal leave quotas."
     },
     "/managers/{managerEmail}": {
-      "schema": { "$ref": "#/entities/Manager" },
+      "schema": {
+        "$ref": "#/entities/Manager"
+      },
       "description": "Authorized manager emails granted access to management views and approvals."
     },
     "/companyHolidays/{holidayId}": {
-      "schema": { "$ref": "#/entities/CompanyHoliday" },
+      "schema": {
+        "$ref": "#/entities/CompanyHoliday"
+      },
       "description": "Company holidays, Tet, compensatory off days, and compensatory working days."
     },
     "/dailyOffStatus/{dateKey}": {
-      "schema": { "$ref": "#/entities/DailyOffStatus" },
+      "schema": {
+        "$ref": "#/entities/DailyOffStatus"
+      },
       "description": "Non-PII daily absent employee ID list for the working-today board and company holiday calendar day-detail view."
     },
     "/monthlyOffStatus/{monthKey}": {
-      "schema": { "$ref": "#/entities/MonthlyOffStatus" },
+      "schema": {
+        "$ref": "#/entities/MonthlyOffStatus"
+      },
       "description": "Non-PII monthly index of employees on approved leave and their exact off dates for the company holiday monthly summary."
     },
     "/leaveRequests/{requestId}": {
-      "schema": { "$ref": "#/entities/LeaveRequest" },
+      "schema": {
+        "$ref": "#/entities/LeaveRequest"
+      },
       "description": "Leave requests, calendar entries, and approval workflow state (manager read; employees may create and read only their own)."
     },
     "/leaveRequestContacts/{requestId}": {
-      "schema": { "$ref": "#/entities/LeaveRequestContact" },
+      "schema": {
+        "$ref": "#/entities/LeaveRequestContact"
+      },
       "description": "Isolated PII email contact per leave request."
     },
-    "/emailLookups/{emailHash}/requests/{requestId}": {
-      "schema": { "$ref": "#/entities/EmailLookupRequest" },
-      "description": "Email-hash-keyed leave request status records for self-service employee lookup."
-    },
-    "/nameLookups/{nameHash}/requests/{requestId}": {
-      "schema": { "$ref": "#/entities/NameLookupRequest" },
-      "description": "Full-name-hash-keyed leave request status records for self-service employee lookup."
-    },
     "/notifications/{notificationId}": {
-      "schema": { "$ref": "#/entities/Notification" },
+      "schema": {
+        "$ref": "#/entities/Notification"
+      },
       "description": "Notifications sent to Managers or recorded for request lifecycle transitions."
+    },
+    "/leaveSummaries/{employeeId}": {
+      "schema": {
+        "$ref": "#/entities/LeaveSummary"
+      },
+      "description": "Public numeric leave balances used by the working-today board; manager-written, anyone can read."
     }
   }
 }

@@ -285,7 +285,11 @@ useEffect(() => {
 
   useEffect(() => {
     if (!isManagerSignedIn || dataLoading || employees.length === 0) return;
-    const signature = `${new Date().getFullYear()}::${employees.length}::${requests
+    const quotaSignature = employees
+      .map((emp) => `${emp.id}=${quotas[emp.id]?.annualLeaveInitial ?? 0}`)
+      .sort()
+      .join(',');
+    const signature = `${new Date().getFullYear()}::${employees.length}::${quotaSignature}::${requests
       .filter((r) => r.status === 'Đã duyệt')
       .map((r) => `${r.id}:${r.employeeId}:${r.allocations.map((a) => `${a.type}=${a.days}`).join(',')}`)
       .sort()
