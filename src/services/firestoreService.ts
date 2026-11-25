@@ -35,18 +35,20 @@ import {
   type AppNotification,
   type CompanyHoliday,
   type Department,
-  type EmailLookupRequestItem,
   type Employee,
   type EmployeeQuota,
   type HolidayCategory,
   type LeaveAllocation,
+  type LeaveLookupRequestItem,
   type LeaveRequestContact,
   type LeaveRequestItem,
+  type LeaveStatus,
+  type LeaveType,
   type ManagerAccount,
   type MonthlyOffEntry,
 } from '../types/leave';
 import { getTodayKey, isWorkingDay, parseDateKey, toDateKey } from '../utils/dateUtils';
-import { sha256Email } from '../utils/hashUtils';
+import { sha256Email, sha256PersonName } from '../utils/hashUtils';
 
 function generateSafeId(prefix: string): string {
   const rand = Math.random().toString(36).slice(2, 10);
@@ -579,15 +581,17 @@ function mapRequestDoc(id: string, data: Record<string, unknown>): LeaveRequestI
     processedBy: typeof data.processedBy === 'string' ? data.processedBy : undefined,
     processedAt: typeof data.processedAt === 'string' ? data.processedAt : undefined,
     emailHash: typeof data.emailHash === 'string' ? data.emailHash : undefined,
+    nameHash: typeof data.nameHash === 'string' ? data.nameHash : undefined,
     submitterUid: String(data.submitterUid || ''),
     createdAtMs: timestampToMs(data.createdAt),
   };
 }
 
-function mapLookupDoc(id: string, data: Record<string, unknown>): EmailLookupRequestItem {
+function mapLookupDoc(id: string, data: Record<string, unknown>): LeaveLookupRequestItem {
   return {
     requestId: String(data.requestId || id),
-    emailHash: String(data.emailHash || ''),
+    emailHash: typeof data.emailHash === 'string' ? data.emailHash : undefined,
+    nameHash: typeof data.nameHash === 'string' ? data.nameHash : undefined,
     employeeId: String(data.employeeId || ''),
     employeeName: String(data.employeeName || ''),
     department: (data.department === 'Quản lý' ? 'Quản lý' : 'Nhân sự') as Department,
@@ -595,7 +599,7 @@ function mapLookupDoc(id: string, data: Record<string, unknown>): EmailLookupReq
     endDate: String(data.endDate || ''),
     workingDays: Number(data.workingDays || 0),
     reason: String(data.reason || ''),
-    status: data.status as EmailLookupRequestItem['status'],
+    status: data.status as LeaveStatus,
     allocations: Array.isArray(data.allocations)
       ? (data.allocations as LeaveAllocation[]).map((a) => ({
           type: a.type,
@@ -629,6 +633,7 @@ export function getOrCreateLocalClientId(): string {
 export function subscribeLeaveRequests(
   isManager: boolean,
   onData: (requests: LeaveRequestItem[]) => void,
+  onAdded?: (added: LeaveRequestItem[], all: LeaveRequestItem[]) => void,
 ): Unsubscribe {
   if (!isManager) {
     onData([]);
@@ -636,12 +641,33 @@ export function subscribeLeaveRequests(
   }
 
   const path = 'leaveRequests';
+  let firstSnapshot = true;
   return onSnapshot(
     collection(db, path),
     (snapshot) => {
       const items = snapshot.docs.map((d) => mapRequestDoc(d.id, d.data()));
       items.sort((a, b) => b.createdAtMs - a.createdAtMs);
       onData(items);
+
+      if (!onAdded) return;
+      // Bỏ qua snapshot đầu tiên (toàn bộ dữ liệu cũ) để không bắn thông báo hàng loạt.
+      if (firstSnapshot) {
+        firstSnapshot = false;
+        return;
+      }
+      const addedIds = new Set(
+        snapshot
+          .docChanges()
+          .filter((change) => change.type === 'added')
+          .map((change) => change.doc.id),
+      );
+      if (addedIds.size === 0) return;
+      const added = items.filter(
+        (item) => addedIds.has(item.id) && item.status === 'Đang chờ duyệt',
+      );
+      if (added.length > 0) {
+        onAdded(added, items);
+      }
     },
     (error) => {
       handleFirestoreError(error, OperationType.LIST, path);
@@ -702,6 +728,9 @@ export async function createManagerAllocatedLeaveRequest(input: {
   const cleanEmail = (input.email || '').trim();
   const hasEmail = cleanEmail.length >= 3 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail);
   const emailHash = hasEmail ? await sha256Email(cleanEmail) : '';
+  const cleanName = clampString(input.employeeName, 100);
+  const nameHash =
+    cleanName.trim().length >= 2 ? await sha256PersonName(cleanName) : '';
   const sanitizedAllocations = input.allocations
     .filter((a) => a.days > 0)
     .slice(0, 6)
@@ -714,7 +743,7 @@ export async function createManagerAllocatedLeaveRequest(input: {
     const batch = writeBatch(db);
     const reqPayload: Record<string, unknown> = {
       employeeId: clampString(input.employeeId, 128),
-      employeeName: clampString(input.employeeName, 100),
+      employeeName: cleanName,
       department: input.department,
       startDate: clampString(input.startDate, 10),
       endDate: clampString(input.endDate, 10),
@@ -735,10 +764,34 @@ export async function createManagerAllocatedLeaveRequest(input: {
     if (emailHash) {
       reqPayload.emailHash = emailHash;
     }
+    if (nameHash) {
+      reqPayload.nameHash = nameHash;
+    }
     if (cleanAttachmentUrl) {
       reqPayload.attachmentUrl = cleanAttachmentUrl;
     }
     batch.set(doc(db, 'leaveRequests', reqId), reqPayload);
+
+    const lookupBase: Record<string, unknown> = {
+      requestId: reqId,
+      employeeId: clampString(input.employeeId, 128),
+      employeeName: cleanName,
+      department: input.department,
+      startDate: clampString(input.startDate, 10),
+      endDate: clampString(input.endDate, 10),
+      workingDays: Number(input.workingDays),
+      reason: clampString(input.reason, 500),
+      status: input.status,
+      allocations: sanitizedAllocations,
+      hospitalCertPending: Boolean(input.hospitalCertPending),
+      processedBy: cleanManager,
+      processedAt: nowIso,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    if (cleanAttachmentUrl) {
+      lookupBase.attachmentUrl = cleanAttachmentUrl;
+    }
 
     if (hasEmail && emailHash) {
       batch.set(doc(db, 'leaveRequestContacts', reqId), {
@@ -748,28 +801,17 @@ export async function createManagerAllocatedLeaveRequest(input: {
         createdAt: serverTimestamp(),
       });
 
-      const lookupPayload: Record<string, unknown> = {
-        requestId: reqId,
+      batch.set(doc(db, 'emailLookups', emailHash, 'requests', reqId), {
+        ...lookupBase,
         emailHash,
-        employeeId: clampString(input.employeeId, 128),
-        employeeName: clampString(input.employeeName, 100),
-        department: input.department,
-        startDate: clampString(input.startDate, 10),
-        endDate: clampString(input.endDate, 10),
-        workingDays: Number(input.workingDays),
-        reason: clampString(input.reason, 500),
-        status: input.status,
-        allocations: sanitizedAllocations,
-        hospitalCertPending: Boolean(input.hospitalCertPending),
-        processedBy: cleanManager,
-        processedAt: nowIso,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-      if (cleanAttachmentUrl) {
-        lookupPayload.attachmentUrl = cleanAttachmentUrl;
-      }
-      batch.set(doc(db, 'emailLookups', emailHash, 'requests', reqId), lookupPayload);
+      });
+    }
+
+    if (nameHash) {
+      batch.set(doc(db, 'nameLookups', nameHash, 'requests', reqId), {
+        ...lookupBase,
+        nameHash,
+      });
     }
 
     if (input.status === 'Đang chờ duyệt') {
@@ -791,7 +833,7 @@ export async function createManagerAllocatedLeaveRequest(input: {
   }
 }
 
-export async function createEmployeeLeaveRequest(input: {
+export interface EmployeeLeaveSubmissionInput {
   employeeId: string;
   employeeName: string;
   department: Department;
@@ -799,147 +841,166 @@ export async function createEmployeeLeaveRequest(input: {
   startDate: string;
   endDate: string;
   workingDays: number;
+  proposedType: LeaveType;
   reason: string;
   note: string;
   hasHospitalCert: boolean;
-  attachmentName?: string;
-}): Promise<string> {
-  const reqId = generateSafeId('req');
+  attachmentUrl?: string;
+}
 
+/**
+ * Nhân viên tự gửi đơn nghỉ phép mà không cần tài khoản Quản lý.
+ * - Dùng Firebase Anonymous Auth để có `uid` gắn với đơn (bắt buộc theo firestore.rules).
+ * - Ghi đồng thời: đơn chờ duyệt, email liên hệ, khóa tra cứu theo email và theo họ tên.
+ * - Không gửi email thông báo; nhân viên tự tra cứu trạng thái trong ứng dụng.
+ */
+export async function submitEmployeeLeaveRequest(
+  input: EmployeeLeaveSubmissionInput,
+): Promise<{ requestId: string }> {
+  const cleanEmail = input.email.trim();
+  if (cleanEmail.length > 160) {
+    throw new Error('Email quá dài (tối đa 160 ký tự).');
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cleanEmail)) {
+    throw new Error('Email không hợp lệ. Vui lòng nhập email bạn dùng để tra cứu đơn.');
+  }
+
+  const employeeName = clampString(input.employeeName, 100);
+  const employeeId = clampString(input.employeeId, 128);
+  if (!employeeId || employeeName.trim().length < 2) {
+    throw new Error('Vui lòng chọn họ tên của bạn trong danh sách nhân sự.');
+  }
+
+  const workingDays = Math.max(0.5, Math.min(365, Number(input.workingDays) || 0));
+  const cleanReason = clampString(input.reason, 500);
+  if (cleanReason.length < 2) {
+    throw new Error('Vui lòng nhập lý do nghỉ phép (tối thiểu 2 ký tự).');
+  }
+
+  let uid = '';
   try {
-    // 1. Đảm bảo người gửi sử dụng phiên Anonymous Authentication.
-    const sessionUser = await ensureEmployeeAnonymousSession();
-
-    if (!sessionUser.isAnonymous) {
+    const account = await ensureEmployeeAnonymousSession();
+    uid = account.uid;
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code)
+        : '';
+    if (code === 'auth/operation-not-allowed') {
       throw new Error(
-        'Phiên quản lý đang đăng nhập. Vui lòng đăng xuất hoặc mở cửa sổ ẩn danh trước khi gửi đơn nhân viên.',
+        'Chưa bật đăng nhập ẩn danh (Anonymous) trong Firebase Authentication. Quản trị viên cần bật để nhân viên gửi đơn không cần đăng nhập.',
       );
     }
+    throw new Error(
+      'Không thể tạo phiên gửi đơn. Vui lòng kiểm tra kết nối mạng và thử lại.',
+    );
+  }
 
-    // 2. Chuẩn hóa và kiểm tra dữ liệu.
-    const cleanEmail = clampString(input.email, 160).toLowerCase();
-    const cleanEmployeeId = clampString(input.employeeId, 128);
-    const cleanEmployeeName = clampString(input.employeeName, 100);
-    const cleanReason = clampString(input.reason, 500);
-    const cleanNote = clampString(input.note || '', 500);
-    const cleanStartDate = clampString(input.startDate, 10);
-    const cleanEndDate = clampString(input.endDate, 10);
-    const cleanAttachmentName = clampString(input.attachmentName || '', 180);
-    const workingDays = Number(input.workingDays);
+  const reqId = generateSafeId('req');
+  const notifId = generateSafeId('notif');
+  const emailHash = await sha256Email(cleanEmail);
+  const nameHash = await sha256PersonName(employeeName);
+  const cleanAttachmentUrl = input.attachmentUrl
+    ? clampString(input.attachmentUrl, 500)
+    : '';
+  const proposedAllocations: LeaveAllocation[] = [
+    { type: input.proposedType, days: workingDays },
+  ];
+  const cleanNote = clampString(input.note || '', 500);
+  const hasHospitalCert = Boolean(input.hasHospitalCert);
 
-    if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(cleanEmail)) {
-      throw new Error('Địa chỉ email không hợp lệ.');
-    }
-
-    if (!cleanEmployeeId || !cleanEmployeeName) {
-      throw new Error('Vui lòng chọn nhân viên hợp lệ từ danh sách.');
-    }
-
-    if (cleanReason.length < 2) {
-      throw new Error('Vui lòng nhập lý do nghỉ phép.');
-    }
-
-    if (
-      !Number.isFinite(workingDays) ||
-      workingDays < 0.5 ||
-      workingDays > 365
-    ) {
-      throw new Error('Số ngày nghỉ không hợp lệ.');
-    }
-
-    if (
-      !/^\d{4}-\d{2}-\d{2}$/.test(cleanStartDate) ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(cleanEndDate) ||
-      cleanEndDate < cleanStartDate
-    ) {
-      throw new Error('Khoảng thời gian nghỉ phép không hợp lệ.');
-    }
-
-    // 3. Tạo mã SHA-256 từ email.
-    const emailHash = await sha256Email(cleanEmail);
-
-    // 4. Chuẩn bị dữ liệu đơn nghỉ phép.
-    const requestPayload = {
-      employeeId: cleanEmployeeId,
-      employeeName: cleanEmployeeName,
+  try {
+    const batch = writeBatch(db);
+    const reqPayload: Record<string, unknown> = {
+      employeeId,
+      employeeName,
       department: input.department,
-      startDate: cleanStartDate,
-      endDate: cleanEndDate,
+      startDate: clampString(input.startDate, 10),
+      endDate: clampString(input.endDate, 10),
       workingDays,
       reason: cleanReason,
       note: cleanNote,
-      status: 'Đang chờ duyệt' as const,
-      allocations: [] as LeaveAllocation[],
-      hasHospitalCert: Boolean(input.hasHospitalCert),
-      attachmentName: cleanAttachmentName,
+      status: 'Đang chờ duyệt',
+      allocations: proposedAllocations,
+      hasHospitalCert,
+      hospitalCertPending: false,
+      attachmentName: '',
       emailHash,
-      submitterUid: sessionUser.uid,
+      nameHash,
+      submitterUid: uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
-
-    // 5. Chuẩn bị dữ liệu tra cứu theo email.
-    const lookupPayload = {
-      requestId: reqId,
-      emailHash,
-      employeeId: cleanEmployeeId,
-      employeeName: cleanEmployeeName,
-      department: input.department,
-      startDate: cleanStartDate,
-      endDate: cleanEndDate,
-      workingDays,
-      reason: cleanReason,
-      status: 'Đang chờ duyệt' as const,
-      allocations: [] as LeaveAllocation[],
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-
-    // 6. Ghi đồng thời cả 4 tài liệu.
-    const batch = writeBatch(db);
-
-    batch.set(doc(db, 'leaveRequests', reqId), requestPayload);
+    if (cleanAttachmentUrl) {
+      reqPayload.attachmentUrl = cleanAttachmentUrl;
+    }
+    batch.set(doc(db, 'leaveRequests', reqId), reqPayload);
 
     batch.set(doc(db, 'leaveRequestContacts', reqId), {
       requestId: reqId,
-      email: cleanEmail,
-      submitterUid: sessionUser.uid,
+      email: clampString(cleanEmail, 160),
+      submitterUid: uid,
       createdAt: serverTimestamp(),
     });
 
-    batch.set(
-      doc(db, 'emailLookups', emailHash, 'requests', reqId),
-      lookupPayload,
-    );
+    const lookupBase: Record<string, unknown> = {
+      requestId: reqId,
+      employeeId,
+      employeeName,
+      department: input.department,
+      startDate: clampString(input.startDate, 10),
+      endDate: clampString(input.endDate, 10),
+      workingDays,
+      reason: cleanReason,
+      status: 'Đang chờ duyệt',
+      allocations: proposedAllocations,
+      hospitalCertPending: false,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    if (cleanAttachmentUrl) {
+      lookupBase.attachmentUrl = cleanAttachmentUrl;
+    }
 
-    // ID thông báo phải trùng ID đơn theo Firestore Rules.
-    batch.set(doc(db, 'notifications', reqId), {
+    batch.set(doc(db, 'emailLookups', emailHash, 'requests', reqId), {
+      ...lookupBase,
+      emailHash,
+    });
+    batch.set(doc(db, 'nameLookups', nameHash, 'requests', reqId), {
+      ...lookupBase,
+      nameHash,
+    });
+
+    batch.set(doc(db, 'notifications', notifId), {
       recipientType: 'admin',
       recipientUid: 'admin',
       requestId: reqId,
-      title: `Đơn nghỉ phép mới: ${cleanEmployeeName}`,
-      message: `${cleanEmployeeName} vừa gửi đơn nghỉ phép từ ${cleanStartDate} đến ${cleanEndDate}.`,
+      title: `Đơn nghỉ mới chờ duyệt: ${employeeName}`,
+      message: `${employeeName} (${input.department}) đã tự gửi đơn nghỉ ${workingDays} ngày (${input.startDate} → ${input.endDate}).`,
       isRead: false,
       createdAt: serverTimestamp(),
     });
 
     await batch.commit();
-
-    return reqId;
+    return { requestId: reqId };
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('Phiên quản lý')) {
-      throw error;
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code)
+        : '';
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    if (
+      code === 'permission-denied' ||
+      rawMessage.includes('Missing or insufficient permissions')
+    ) {
+      throw new Error(
+        'Máy chủ chưa cho phép nhân viên tự gửi đơn. Quản trị viên cần deploy firestore.rules mới và bật đăng nhập ẩn danh (Anonymous).',
+      );
     }
-
-    handleFirestoreError(
-      error,
-      OperationType.CREATE,
-      `leaveRequests/${reqId}`,
-    );
-
-    throw error;
+    handleFirestoreError(error, OperationType.CREATE, `leaveRequests/${reqId}`);
   }
 }
+
 
 async function resolveEmailHash(
   request: LeaveRequestItem,
@@ -954,65 +1015,111 @@ async function resolveEmailHash(
   return null;
 }
 
+async function resolveNameHash(request: LeaveRequestItem): Promise<string | null> {
+  if (request.nameHash && /^[a-f0-9]{64}$/.test(request.nameHash)) {
+    return request.nameHash;
+  }
+  if (request.employeeName.trim().length < 2) {
+    return null;
+  }
+  return sha256PersonName(request.employeeName);
+}
+
+interface LookupPatch {
+  status: LeaveStatus;
+  allocations: LeaveAllocation[];
+  hospitalCertPending?: boolean;
+  rejectionReason?: string;
+  processedBy: string;
+  processedAt: string;
+}
+
+function buildLookupCreatePayload(
+  request: LeaveRequestItem,
+  patch: LookupPatch,
+  extra: Record<string, unknown>,
+): Record<string, unknown> {
+  const createPayload: Record<string, unknown> = {
+    requestId: request.id,
+    ...extra,
+    employeeId: request.employeeId,
+    employeeName: clampString(request.employeeName, 100),
+    department: request.department,
+    startDate: request.startDate,
+    endDate: request.endDate,
+    workingDays: Number(request.workingDays),
+    reason: clampString(request.reason, 500),
+    status: patch.status,
+    allocations: patch.allocations,
+    hospitalCertPending: Boolean(
+      patch.hospitalCertPending ?? request.hospitalCertPending,
+    ),
+    processedBy: patch.processedBy,
+    processedAt: patch.processedAt,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  if (request.attachmentUrl) {
+    createPayload.attachmentUrl = clampString(request.attachmentUrl, 500);
+  }
+  if (patch.rejectionReason !== undefined) {
+    createPayload.rejectionReason = patch.rejectionReason;
+  }
+  return createPayload;
+}
+
+function buildLookupUpdatePayload(patch: LookupPatch): Record<string, unknown> {
+  const updatePayload: Record<string, unknown> = {
+    status: patch.status,
+    allocations: patch.allocations,
+    processedBy: patch.processedBy,
+    processedAt: patch.processedAt,
+    updatedAt: serverTimestamp(),
+  };
+  if (patch.hospitalCertPending !== undefined) {
+    updatePayload.hospitalCertPending = Boolean(patch.hospitalCertPending);
+  }
+  if (patch.rejectionReason !== undefined) {
+    updatePayload.rejectionReason = patch.rejectionReason;
+  }
+  return updatePayload;
+}
+
 async function upsertLookupInBatch(
   batch: ReturnType<typeof writeBatch>,
   emailHash: string,
   request: LeaveRequestItem,
-  patch: {
-    status: LeaveRequestItem['status'];
-    allocations: LeaveAllocation[];
-    hospitalCertPending?: boolean;
-    rejectionReason?: string;
-    processedBy: string;
-    processedAt: string;
-  },
+  patch: LookupPatch,
 ): Promise<void> {
   const lookupRef = doc(db, 'emailLookups', emailHash, 'requests', request.id);
   const existingSnap = await getDoc(lookupRef);
 
   if (existingSnap.exists()) {
-    const updatePayload: Record<string, unknown> = {
-      status: patch.status,
-      allocations: patch.allocations,
-      processedBy: patch.processedBy,
-      processedAt: patch.processedAt,
-      updatedAt: serverTimestamp(),
-    };
-    if (patch.hospitalCertPending !== undefined) {
-      updatePayload.hospitalCertPending = Boolean(patch.hospitalCertPending);
-    }
-    if (patch.rejectionReason !== undefined) {
-      updatePayload.rejectionReason = patch.rejectionReason;
-    }
-    batch.update(lookupRef, updatePayload);
+    batch.update(lookupRef, buildLookupUpdatePayload(patch));
   } else {
-    const createPayload: Record<string, unknown> = {
-      requestId: request.id,
-      emailHash,
-      employeeId: request.employeeId,
-      employeeName: clampString(request.employeeName, 100),
-      department: request.department,
-      startDate: request.startDate,
-      endDate: request.endDate,
-      workingDays: Number(request.workingDays),
-      reason: clampString(request.reason, 500),
-      status: patch.status,
-      allocations: patch.allocations,
-      hospitalCertPending: Boolean(
-        patch.hospitalCertPending ?? request.hospitalCertPending,
-      ),
-      processedBy: patch.processedBy,
-      processedAt: patch.processedAt,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-    if (request.attachmentUrl) {
-      createPayload.attachmentUrl = clampString(request.attachmentUrl, 500);
-    }
-    if (patch.rejectionReason !== undefined) {
-      createPayload.rejectionReason = patch.rejectionReason;
-    }
-    batch.set(lookupRef, createPayload);
+    batch.set(
+      lookupRef,
+      buildLookupCreatePayload(request, patch, { emailHash }),
+    );
+  }
+}
+
+async function upsertNameLookupInBatch(
+  batch: ReturnType<typeof writeBatch>,
+  nameHash: string,
+  request: LeaveRequestItem,
+  patch: LookupPatch,
+): Promise<void> {
+  const lookupRef = doc(db, 'nameLookups', nameHash, 'requests', request.id);
+  const existingSnap = await getDoc(lookupRef);
+
+  if (existingSnap.exists()) {
+    batch.update(lookupRef, buildLookupUpdatePayload(patch));
+  } else {
+    batch.set(
+      lookupRef,
+      buildLookupCreatePayload(request, patch, { nameHash }),
+    );
   }
 }
 
@@ -1027,6 +1134,7 @@ export async function receiveLeaveRequest(
 
   try {
     const emailHash = await resolveEmailHash(request, contactEmail);
+    const nameHash = await resolveNameHash(request);
     const batch = writeBatch(db);
     const reqUpdate: Record<string, unknown> = {
       status: 'Đang chờ duyệt',
@@ -1037,10 +1145,21 @@ export async function receiveLeaveRequest(
     if (emailHash && !request.emailHash) {
       reqUpdate.emailHash = emailHash;
     }
+    if (nameHash && !request.nameHash) {
+      reqUpdate.nameHash = nameHash;
+    }
     batch.update(doc(db, 'leaveRequests', request.id), reqUpdate);
 
     if (emailHash) {
       await upsertLookupInBatch(batch, emailHash, request, {
+        status: 'Đang chờ duyệt',
+        allocations: request.allocations,
+        processedBy: cleanManager,
+        processedAt: nowIso,
+      });
+    }
+    if (nameHash) {
+      await upsertNameLookupInBatch(batch, nameHash, request, {
         status: 'Đang chờ duyệt',
         allocations: request.allocations,
         processedBy: cleanManager,
@@ -1083,6 +1202,7 @@ export async function approveLeaveRequest(
 
   try {
     const emailHash = await resolveEmailHash(request, contactEmail);
+    const nameHash = await resolveNameHash(request);
     const batch = writeBatch(db);
     const reqUpdate: Record<string, unknown> = {
       status: 'Đã duyệt',
@@ -1096,10 +1216,22 @@ export async function approveLeaveRequest(
     if (emailHash && !request.emailHash) {
       reqUpdate.emailHash = emailHash;
     }
+    if (nameHash && !request.nameHash) {
+      reqUpdate.nameHash = nameHash;
+    }
     batch.update(doc(db, 'leaveRequests', request.id), reqUpdate);
 
     if (emailHash) {
       await upsertLookupInBatch(batch, emailHash, request, {
+        status: 'Đã duyệt',
+        allocations: cleanAllocations,
+        hospitalCertPending: Boolean(hospitalCertPending),
+        processedBy: cleanManager,
+        processedAt: nowIso,
+      });
+    }
+    if (nameHash) {
+      await upsertNameLookupInBatch(batch, nameHash, request, {
         status: 'Đã duyệt',
         allocations: cleanAllocations,
         hospitalCertPending: Boolean(hospitalCertPending),
@@ -1133,6 +1265,7 @@ export async function markHospitalCertReceived(
 
   try {
     const emailHash = await resolveEmailHash(request, contactEmail);
+    const nameHash = await resolveNameHash(request);
     const batch = writeBatch(db);
     const reqUpdate: Record<string, unknown> = {
       hasHospitalCert: true,
@@ -1144,10 +1277,22 @@ export async function markHospitalCertReceived(
     if (emailHash && !request.emailHash) {
       reqUpdate.emailHash = emailHash;
     }
+    if (nameHash && !request.nameHash) {
+      reqUpdate.nameHash = nameHash;
+    }
     batch.update(doc(db, 'leaveRequests', request.id), reqUpdate);
 
     if (emailHash) {
       await upsertLookupInBatch(batch, emailHash, request, {
+        status: request.status,
+        allocations: request.allocations,
+        hospitalCertPending: false,
+        processedBy: cleanManager,
+        processedAt: nowIso,
+      });
+    }
+    if (nameHash) {
+      await upsertNameLookupInBatch(batch, nameHash, request, {
         status: request.status,
         allocations: request.allocations,
         hospitalCertPending: false,
@@ -1175,6 +1320,7 @@ export async function rejectLeaveRequest(
 
   try {
     const emailHash = await resolveEmailHash(request, contactEmail);
+    const nameHash = await resolveNameHash(request);
     const batch = writeBatch(db);
     const reqUpdate: Record<string, unknown> = {
       status: 'Từ chối',
@@ -1186,10 +1332,22 @@ export async function rejectLeaveRequest(
     if (emailHash && !request.emailHash) {
       reqUpdate.emailHash = emailHash;
     }
+    if (nameHash && !request.nameHash) {
+      reqUpdate.nameHash = nameHash;
+    }
     batch.update(doc(db, 'leaveRequests', request.id), reqUpdate);
 
     if (emailHash) {
       await upsertLookupInBatch(batch, emailHash, request, {
+        status: 'Từ chối',
+        allocations: request.allocations,
+        rejectionReason: cleanReason,
+        processedBy: cleanManager,
+        processedAt: nowIso,
+      });
+    }
+    if (nameHash) {
+      await upsertNameLookupInBatch(batch, nameHash, request, {
         status: 'Từ chối',
         allocations: request.allocations,
         rejectionReason: cleanReason,
@@ -1213,31 +1371,58 @@ export async function rejectLeaveRequest(
   }
 }
 
-export async function syncMissingEmailLookups(
+export async function syncMissingLookups(
   requests: LeaveRequestItem[],
   contacts: Record<string, LeaveRequestContact>,
 ): Promise<void> {
-  const missing = requests.filter((r) => !r.emailHash && contacts[r.id]?.email);
-  if (missing.length === 0) return;
+  const pending = requests.filter(
+    (r) => !r.emailHash || !r.nameHash,
+  );
+  if (pending.length === 0) return;
 
   try {
     const batch = writeBatch(db);
     let count = 0;
-    for (const req of missing.slice(0, 20)) {
+    for (const req of pending.slice(0, 20)) {
       const email = contacts[req.id]?.email;
-      if (!email) continue;
-      const emailHash = await sha256Email(email);
-      batch.update(doc(db, 'leaveRequests', req.id), {
-        emailHash,
+      const reqUpdate: Record<string, unknown> = {
         updatedAt: serverTimestamp(),
-      });
-      await upsertLookupInBatch(batch, emailHash, req, {
+      };
+      let changed = false;
+
+      let emailHash: string | null = null;
+      if (!req.emailHash && email) {
+        emailHash = await sha256Email(email);
+        reqUpdate.emailHash = emailHash;
+        changed = true;
+      }
+
+      let nameHash: string | null = null;
+      if (!req.nameHash) {
+        nameHash = await resolveNameHash(req);
+        if (nameHash) {
+          reqUpdate.nameHash = nameHash;
+          changed = true;
+        }
+      }
+
+      if (!changed) continue;
+      batch.update(doc(db, 'leaveRequests', req.id), reqUpdate);
+
+      const patch = {
         status: req.status,
         allocations: req.allocations,
         rejectionReason: req.rejectionReason,
         processedBy: req.processedBy || 'Quản lý',
         processedAt: req.processedAt || new Date().toISOString(),
-      });
+      };
+
+      if (emailHash) {
+        await upsertLookupInBatch(batch, emailHash, req, patch);
+      }
+      if (nameHash) {
+        await upsertNameLookupInBatch(batch, nameHash, req, patch);
+      }
       count += 1;
     }
     if (count > 0) {
@@ -1250,11 +1435,31 @@ export async function syncMissingEmailLookups(
 
 export async function lookupLeaveRequestsByEmail(
   email: string,
-): Promise<EmailLookupRequestItem[]> {
+): Promise<LeaveLookupRequestItem[]> {
   const emailHash = await sha256Email(email);
   const path = `emailLookups/${emailHash}/requests`;
   try {
     const q = query(collection(db, path), where('emailHash', '==', emailHash));
+    const snapshot = await getDocs(q);
+    const items = snapshot.docs.map((d) => mapLookupDoc(d.id, d.data()));
+    items.sort((a, b) => b.createdAtMs - a.createdAtMs);
+    return items;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+  }
+}
+
+export async function lookupLeaveRequestsByName(
+  fullName: string,
+): Promise<LeaveLookupRequestItem[]> {
+  const normalized = fullName.replace(/\s+/g, ' ').trim();
+  if (normalized.length < 2) {
+    return [];
+  }
+  const nameHash = await sha256PersonName(normalized);
+  const path = `nameLookups/${nameHash}/requests`;
+  try {
+    const q = query(collection(db, path), where('nameHash', '==', nameHash));
     const snapshot = await getDocs(q);
     const items = snapshot.docs.map((d) => mapLookupDoc(d.id, d.data()));
     items.sort((a, b) => b.createdAtMs - a.createdAtMs);

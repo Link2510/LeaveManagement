@@ -91,13 +91,20 @@ export interface LeaveRequestItem {
   processedBy?: string;
   processedAt?: string;
   emailHash?: string;
+  nameHash?: string;
   submitterUid: string;
   createdAtMs: number;
 }
 
-export interface EmailLookupRequestItem {
+/**
+ * Bản tóm tắt trạng thái đơn nghỉ dùng cho tra cứu công khai.
+ * - `emailLookups/{emailHash}/requests` dùng cho tra cứu theo email.
+ * - `nameLookups/{nameHash}/requests` dùng cho tra cứu theo họ tên.
+ */
+export interface LeaveLookupRequestItem {
   requestId: string;
-  emailHash: string;
+  emailHash?: string;
+  nameHash?: string;
   employeeId: string;
   employeeName: string;
   department: Department;
@@ -114,6 +121,9 @@ export interface EmailLookupRequestItem {
   processedAt?: string;
   createdAtMs: number;
 }
+
+/** @deprecated Dùng `LeaveLookupRequestItem` cho cả tra cứu email và họ tên. */
+export type EmailLookupRequestItem = LeaveLookupRequestItem;
 
 export interface LeaveRequestContact {
   requestId: string;

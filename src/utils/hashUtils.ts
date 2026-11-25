@@ -1,8 +1,24 @@
 const LOOKUP_NAMESPACE = 'lm_lookup_v1:';
+const NAME_LOOKUP_NAMESPACE = 'lm_lookup_v1:name:';
 
-export async function sha256Email(email: string): Promise<string> {
-  const normalized = `${LOOKUP_NAMESPACE}${email.trim().toLowerCase()}`;
-  const bytes = new TextEncoder().encode(normalized);
+/**
+ * Chuẩn hóa họ tên để tra cứu: bỏ dấu tiếng Việt, chữ hoa/thường,
+ * khoảng trắng thừa — nhờ đó "Nguyễn  Minh Anh" và "nguyen minh anh"
+ * cho cùng một khóa tra cứu.
+ */
+export function normalizePersonName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function sha256Text(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
 
   if (typeof crypto !== 'undefined' && crypto.subtle) {
     const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
@@ -11,6 +27,15 @@ export async function sha256Email(email: string): Promise<string> {
   }
 
   return sha256Fallback(bytes);
+}
+
+export async function sha256Email(email: string): Promise<string> {
+  const normalized = `${LOOKUP_NAMESPACE}${email.trim().toLowerCase()}`;
+  return sha256Text(normalized);
+}
+
+export async function sha256PersonName(name: string): Promise<string> {
+  return sha256Text(`${NAME_LOOKUP_NAMESPACE}${normalizePersonName(name)}`);
 }
 
 function sha256Fallback(data: Uint8Array): string {

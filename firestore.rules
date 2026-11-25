@@ -28,13 +28,8 @@ service cloud.firestore {
     }
 
     function isSignedIn() {
-  return request.auth != null;
-}
-
-function isAnonymousUser() {
-  return isSignedIn()
-    && request.auth.token.firebase.sign_in_provider == 'anonymous';
-}
+      return request.auth != null;
+    }
 
     function isVerifiedUser() {
       return isSignedIn() && request.auth.token.email_verified == true;
@@ -181,8 +176,8 @@ function isAnonymousUser() {
           'employeeId', 'employeeName', 'department', 'startDate', 'endDate',
           'workingDays', 'reason', 'note', 'status', 'allocations',
           'hasHospitalCert', 'hospitalCertPending', 'attachmentName', 'attachmentUrl',
-          'rejectionReason', 'processedBy', 'processedAt', 'emailHash', 'submitterUid',
-          'createdAt', 'updatedAt'
+          'rejectionReason', 'processedBy', 'processedAt', 'emailHash', 'nameHash',
+          'submitterUid', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.employeeId)
         && data.employeeName is string && data.employeeName.size() >= 2 && data.employeeName.size() <= 100
@@ -202,23 +197,10 @@ function isAnonymousUser() {
         && (!('processedBy' in data) || (data.processedBy is string && data.processedBy.size() <= 120))
         && (!('processedAt' in data) || (data.processedAt is string && data.processedAt.size() <= 64))
         && (!('emailHash' in data) || isValidSha256Id(data.emailHash))
+        && (!('nameHash' in data) || isValidSha256Id(data.nameHash))
         && isValidId(data.submitterUid)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
-    }
-
-    function isValidEmployeeSubmittedRequest(data) {
-      return isAnonymousUser()
-        && isValidLeaveRequest(data)
-        && data.keys().hasAll(['emailHash'])
-        && data.submitterUid == request.auth.uid
-        && data.status == 'Đang chờ duyệt'
-        && data.allocations.size() == 0
-        && !('processedBy' in data)
-        && !('processedAt' in data)
-        && !('rejectionReason' in data)
-        && !('hospitalCertPending' in data)
-        && !('attachmentUrl' in data);
     }
 
     function isValidLeaveRequestContact(data) {
@@ -226,6 +208,7 @@ function isAnonymousUser() {
         && data.keys().hasOnly(['requestId', 'email', 'submitterUid', 'createdAt'])
         && isValidId(data.requestId)
         && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.email.matches('^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$')
         && isValidId(data.submitterUid)
         && data.createdAt is timestamp;
     }
@@ -245,6 +228,40 @@ function isAnonymousUser() {
         ])
         && isValidId(data.requestId)
         && isValidSha256Id(data.emailHash)
+        && isValidId(data.employeeId)
+        && data.employeeName is string && data.employeeName.size() >= 2 && data.employeeName.size() <= 100
+        && isValidDepartment(data.department)
+        && isValidDateString(data.startDate)
+        && isValidDateString(data.endDate)
+        && data.workingDays is number && data.workingDays >= 0.5 && data.workingDays <= 365
+        && data.reason is string && data.reason.size() >= 2 && data.reason.size() <= 500
+        && data.status is string && data.status in ['Mới tạo', 'Đang chờ duyệt', 'Đã duyệt', 'Từ chối']
+        && isValidAllocations(data.allocations)
+        && (!('hospitalCertPending' in data) || data.hospitalCertPending is bool)
+        && (!('attachmentUrl' in data) || isValidDriveUrl(data.attachmentUrl))
+        && (!('rejectionReason' in data) || (data.rejectionReason is string && data.rejectionReason.size() <= 500))
+        && (!('processedBy' in data) || (data.processedBy is string && data.processedBy.size() <= 120))
+        && (!('processedAt' in data) || (data.processedAt is string && data.processedAt.size() <= 64))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Cùng cấu trúc với bản tra cứu theo email, nhưng khóa là SHA-256 của họ tên.
+    function isValidNameLookupRequest(data) {
+      return data.keys().hasAll([
+          'requestId', 'nameHash', 'employeeId', 'employeeName', 'department',
+          'startDate', 'endDate', 'workingDays', 'reason', 'status',
+          'allocations', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'requestId', 'nameHash', 'employeeId', 'employeeName', 'department',
+          'startDate', 'endDate', 'workingDays', 'reason', 'status',
+          'allocations', 'hospitalCertPending', 'attachmentUrl',
+          'rejectionReason', 'processedBy', 'processedAt',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.requestId)
+        && isValidSha256Id(data.nameHash)
         && isValidId(data.employeeId)
         && data.employeeName is string && data.employeeName.size() >= 2 && data.employeeName.size() <= 100
         && isValidDepartment(data.department)
@@ -388,28 +405,33 @@ function isAnonymousUser() {
       allow delete: if isValidMonthString(monthKey) && isManager();
     }
 
-    // 5. Leave Requests (STRICTLY Manager-only create, read, list, update)
+    // 5. Leave Requests
+    // - Quản lý: tạo/đọc/sửa toàn bộ như trước.
+    // - Nhân viên (kể cả ẩn danh): chỉ được TẠO đơn "Đang chờ duyệt" gắn đúng uid
+    //   của mình, và chỉ được đọc đơn do chính uid đó gửi.
     match /leaveRequests/{requestId} {
-      allow get: if isValidId(requestId) && isManager();
+      allow get: if isValidId(requestId)
+        && (
+          isManager()
+          || (isSignedIn() && existing().submitterUid == request.auth.uid)
+        );
       allow list: if isManager();
       allow create: if isValidId(requestId)
-        && (
-          (
-            isManager()
-            && isValidLeaveRequest(incoming())
-          )
-          ||
-          (
-            isValidEmployeeSubmittedRequest(incoming())
-            && exists(/databases/$(database)/documents/employees/$(incoming().employeeId))
-            && get(/databases/$(database)/documents/employees/$(incoming().employeeId)).data.name == incoming().employeeName
-            && get(/databases/$(database)/documents/employees/$(incoming().employeeId)).data.department == incoming().department
-          )
-        )
-        && exists(/databases/$(database)/documents/employees/$(incoming().employeeId))
+        && isValidLeaveRequest(incoming())
+        && isSignedIn()
         && incoming().createdAt == request.time
-        && incoming().updatedAt == request.time;
-
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/employees/$(incoming().employeeId))
+        && (
+          isManager()
+          || (
+            incoming().submitterUid == request.auth.uid
+            && incoming().status == 'Đang chờ duyệt'
+            && !('processedBy' in incoming())
+            && !('processedAt' in incoming())
+            && !('rejectionReason' in incoming())
+          )
+        );
       allow update: if isValidId(requestId)
         && isManager()
         && isValidLeaveRequest(incoming())
@@ -418,42 +440,35 @@ function isAnonymousUser() {
         && incoming().updatedAt == request.time
         && incoming().diff(existing()).affectedKeys().hasOnly([
           'status', 'allocations', 'hasHospitalCert', 'hospitalCertPending', 'rejectionReason',
-          'processedBy', 'processedAt', 'emailHash', 'updatedAt'
+          'processedBy', 'processedAt', 'emailHash', 'nameHash', 'updatedAt'
         ]);
       allow delete: if false;
     }
 
-    // 6. Isolated PII Contacts (Manager-only read and write)
+    // 6. Isolated PII Contacts (email nhận thông báo; chỉ Quản lý đọc)
     match /leaveRequestContacts/{requestId} {
       allow get: if isValidId(requestId) && isManager();
       allow list: if isManager();
-            allow create: if isValidId(requestId)
+      allow create: if isValidId(requestId)
         && isValidLeaveRequestContact(incoming())
+        && isSignedIn()
         && incoming().requestId == requestId
+        && incoming().submitterUid == request.auth.uid
         && incoming().createdAt == request.time
         && existsAfter(/databases/$(database)/documents/leaveRequests/$(requestId))
-        && (
-          isManager()
-          ||
-          (
-            isAnonymousUser()
-            && incoming().submitterUid == request.auth.uid
-            && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.submitterUid == request.auth.uid
-            && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.emailHash != null
-          )
-        );
+        && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.submitterUid == request.auth.uid;
       allow update: if false;
       allow delete: if false;
     }
 
-    // 7. Email-Hash-Scoped Status Lookup (Manager writes; exact email SHA-256 read for employees if email was provided)
+    // 7. Email-Hash-Scoped Status Lookup (khóa băm email đóng vai trò "mã tra cứu")
     match /emailLookups/{emailHash}/requests/{requestId} {
       allow get: if isValidSha256Id(emailHash)
         && isValidId(requestId)
         && (isManager() || existing().emailHash == emailHash);
       allow list: if isManager()
         || (isValidSha256Id(emailHash) && resource.data.emailHash == emailHash);
-            allow create: if isValidSha256Id(emailHash)
+      allow create: if isValidSha256Id(emailHash)
         && isValidId(requestId)
         && isValidEmailLookupRequest(incoming())
         && incoming().emailHash == emailHash
@@ -462,19 +477,10 @@ function isAnonymousUser() {
         && incoming().updatedAt == request.time
         && existsAfter(/databases/$(database)/documents/leaveRequests/$(requestId))
         && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.employeeId == incoming().employeeId
+        && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.emailHash == emailHash
         && (
           isManager()
-          ||
-          (
-            isAnonymousUser()
-            && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.submitterUid == request.auth.uid
-            && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.emailHash == emailHash
-            && incoming().status == 'Đang chờ duyệt'
-            && incoming().allocations.size() == 0
-            && !('rejectionReason' in incoming())
-            && !('processedBy' in incoming())
-            && !('processedAt' in incoming())
-          )
+          || getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.submitterUid == request.auth.uid
         );
       allow update: if isValidSha256Id(emailHash)
         && isValidId(requestId)
@@ -491,17 +497,54 @@ function isAnonymousUser() {
       allow delete: if false;
     }
 
-    // 8. Notifications (Manager-only create/read/list/update/delete)
+    // 7b. Name-Hash-Scoped Status Lookup (tra cứu theo họ tên đã chuẩn hoá dấu)
+    match /nameLookups/{nameHash}/requests/{requestId} {
+      allow get: if isValidSha256Id(nameHash)
+        && isValidId(requestId)
+        && (isManager() || existing().nameHash == nameHash);
+      allow list: if isManager()
+        || (isValidSha256Id(nameHash) && resource.data.nameHash == nameHash);
+      allow create: if isValidSha256Id(nameHash)
+        && isValidId(requestId)
+        && isValidNameLookupRequest(incoming())
+        && incoming().nameHash == nameHash
+        && incoming().requestId == requestId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/leaveRequests/$(requestId))
+        && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.employeeId == incoming().employeeId
+        && getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.nameHash == nameHash
+        && (
+          isManager()
+          || getAfter(/databases/$(database)/documents/leaveRequests/$(requestId)).data.submitterUid == request.auth.uid
+        );
+      allow update: if isValidSha256Id(nameHash)
+        && isValidId(requestId)
+        && isManager()
+        && isValidNameLookupRequest(incoming())
+        && incoming().nameHash == existing().nameHash
+        && incoming().requestId == existing().requestId
+        && incoming().employeeId == existing().employeeId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'status', 'allocations', 'hospitalCertPending', 'rejectionReason', 'processedBy', 'processedAt', 'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    // 8. Notifications (Quản lý đọc/ghi; nhân viên chỉ được tạo thông báo cho Quản lý
+    //    về đơn do chính mình vừa gửi)
     match /notifications/{notificationId} {
       allow get: if isValidId(notificationId) && isManager();
       allow list: if isManager();
-            allow create: if isValidId(notificationId)
+      allow create: if isValidId(notificationId)
+        && isValidNotification(incoming())
+        && incoming().isRead == false
+        && incoming().createdAt == request.time
         && (
           (
             isManager()
-            && isValidNotification(incoming())
-            && incoming().isRead == false
-            && incoming().createdAt == request.time
             && (
               (
                 incoming().recipientType == 'admin'
@@ -511,19 +554,12 @@ function isAnonymousUser() {
               || incoming().recipientType == 'employee'
             )
           )
-          ||
-          (
-            isAnonymousUser()
-            && isValidNotification(incoming())
+          || (
+            isSignedIn()
             && incoming().recipientType == 'admin'
             && incoming().recipientUid == 'admin'
-            && incoming().isRead == false
-            && incoming().createdAt == request.time
-            && notificationId == incoming().requestId
-            && !exists(/databases/$(database)/documents/leaveRequests/$(incoming().requestId))
             && existsAfter(/databases/$(database)/documents/leaveRequests/$(incoming().requestId))
             && getAfter(/databases/$(database)/documents/leaveRequests/$(incoming().requestId)).data.submitterUid == request.auth.uid
-            && getAfter(/databases/$(database)/documents/leaveRequests/$(incoming().requestId)).data.status == 'Đang chờ duyệt'
           )
         );
       allow update: if isValidId(notificationId)

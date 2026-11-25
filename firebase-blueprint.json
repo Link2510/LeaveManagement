@@ -160,7 +160,7 @@
           "type": "string",
           "minLength": 10,
           "maxLength": 10,
-          "pattern": "^\\d{4}-\\d{2}-\d{2}$"
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
         },
         "workingDays": {
           "type": "number"
@@ -210,6 +210,12 @@
           "maxLength": 64
         },
         "emailHash": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "nameHash": {
           "type": "string",
           "minLength": 64,
           "maxLength": 64,
@@ -381,6 +387,110 @@
         "updatedAt"
       ]
     },
+    "NameLookupRequest": {
+      "title": "NameLookupRequest",
+      "description": "Name-hash-scoped status summary enabling employees to look up their leave requests by full name without exposing other employees' email addresses.",
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "nameHash": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "employeeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "employeeName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "department": {
+          "type": "string",
+          "enum": ["Quản lý", "Nhân sự"]
+        },
+        "startDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "endDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "workingDays": {
+          "type": "number"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 500
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Mới tạo", "Đang chờ duyệt", "Đã duyệt", "Từ chối"]
+        },
+        "allocations": {
+          "type": "array"
+        },
+        "hospitalCertPending": {
+          "type": "boolean"
+        },
+        "attachmentUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "pattern": "^https://(drive|docs)\\.google\\.com/[^\\s]+$"
+        },
+        "rejectionReason": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "processedBy": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "processedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "requestId",
+        "nameHash",
+        "employeeId",
+        "employeeName",
+        "department",
+        "startDate",
+        "endDate",
+        "workingDays",
+        "reason",
+        "status",
+        "allocations",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
     "DailyOffStatus": {
       "title": "DailyOffStatus",
       "description": "Non-PII daily index of employee IDs on approved leave for a single date so the attendance board and company holiday calendar show absent employees without exposing leave records.",
@@ -492,7 +602,7 @@
     },
     "/leaveRequests/{requestId}": {
       "schema": { "$ref": "#/entities/LeaveRequest" },
-      "description": "Leave requests, calendar entries, and approval workflow state (Manager-only read)."
+      "description": "Leave requests, calendar entries, and approval workflow state (manager read; employees may create and read only their own)."
     },
     "/leaveRequestContacts/{requestId}": {
       "schema": { "$ref": "#/entities/LeaveRequestContact" },
@@ -501,6 +611,10 @@
     "/emailLookups/{emailHash}/requests/{requestId}": {
       "schema": { "$ref": "#/entities/EmailLookupRequest" },
       "description": "Email-hash-keyed leave request status records for self-service employee lookup."
+    },
+    "/nameLookups/{nameHash}/requests/{requestId}": {
+      "schema": { "$ref": "#/entities/NameLookupRequest" },
+      "description": "Full-name-hash-keyed leave request status records for self-service employee lookup."
     },
     "/notifications/{notificationId}": {
       "schema": { "$ref": "#/entities/Notification" },

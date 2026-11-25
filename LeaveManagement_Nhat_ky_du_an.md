@@ -53,7 +53,7 @@
 - Xây dựng route `POST /api/notify-email` trong `server.ts` và client helper `src/services/emailService.ts`:
   - Khi nhân viên gửi đơn mới (`NEW_REQUEST`): áp dụng rate limit theo IP để chống spam và gửi email cảnh báo tới email Quản lý.
   - Khi Quản lý tiếp nhận (`RECEIVED`), duyệt (`APPROVED`) hoặc từ chối (`REJECTED`): bắt buộc xác thực `Authorization: Bearer <Firebase ID Token>` và kiểm tra quyền Quản lý qua Firestore trước khi gửi email trả kết quả cho nhân viên.
-  - Sử dụng Resend API nếu có `RESEND_API_KEY` trong môi trường; nếu chưa cấu hình khóa API, hệ thống ghi nhận thông báo nội bộ trên Firestore (`/notifications`) và cung cấp liên kết `mailto:` dự phòng trên giao diện.
+  - Sử dụng Resend API nếu có `RESEND_API_KEY` trong môi trường; nếu chưa cấu hình khóa API, hệ thống ghi nhận thông báo nội bộ trên Firestore (`/notifications`) và cung cấp liên kết `mailto:` dự phòng trên giao diện. *(Phần gửi email đã được bỏ hoàn toàn ở mục 2.14.)*
 
 ### 2.6 Cải tiến hiệu ứng chuyển động Menu & Giao diện
 - Tích hợp `motion/react` trong `src/App.tsx`:
@@ -113,6 +113,26 @@
   - Giao diện thanh điều hướng bên trái (Sidebar) được đồng bộ màu thương hiệu xanh `#25576b`.
   - Siết chặt `firestore.rules`: chỉ `isManager()` mới được phép tạo mới tài liệu trong `/leaveRequests`, `/leaveRequestContacts`, `/emailLookups` và `/notifications`.
 
+### 2.14 Nhân viên tự đăng ký nghỉ phép không cần đăng nhập + email kết quả + tra cứu theo họ tên
+
+- **Form nhân viên (`src/components/EmployeeLeaveRequestForm.tsx`):** chọn họ tên từ danh sách nhân sự, nhập email dùng để tra cứu, chọn khoảng ngày bằng bộ chọn tiếng Việt (tự trừ T7/CN + ngày lễ, cộng ngày OT), nhập lý do/ghi chú, đề xuất loại phép; nghỉ ốm có thể đánh dấu đã có giấy xác nhận và dán liên kết Google Drive. Đơn gửi xong hiển thị mã đơn + nút chuyển sang tra cứu.
+- **Phiên ẩn danh (`src/firebase.ts` – `ensureEmployeeAnonymousSession`):** mỗi lần gửi đơn, app đăng nhập ẩn danh để có `uid`, nhờ đó rules xác thực được đơn do chính người gửi tạo mà người dùng không phải đăng nhập. Phiên ẩn danh không hiện cảnh báo "chưa được cấp quyền Quản lý" (đã sửa trong `App.tsx`).
+- **Ghi dữ liệu nguyên tử (`submitEmployeeLeaveRequest`):** một batch gồm đơn `Đang chờ duyệt` + `leaveRequestContacts` + `emailLookups` + `nameLookups` + thông báo cho Quản lý.
+- **Tra cứu (`src/components/EmployeeLeaveLookup.tsx`):** hai chế độ **Theo email** và **Theo họ tên**; họ tên được chuẩn hoá dấu tiếng Việt (`normalizePersonName`, `sha256PersonName` trong `hashUtils.ts`) nên `Nguyen Minh Anh` và `Nguyễn Minh Anh` cho cùng kết quả. Kết quả hiển thị trạng thái, khoảng ngày, số ngày, phân bổ được duyệt, lý do từ chối, người xử lý và liên kết giấy xác nhận.
+- **Hàng đợi duyệt (`src/components/LeaveApprovalQueue.tsx`):** tab **Duyệt đơn chờ** (kèm badge số đơn) cho Quản lý; sửa phân bổ với ràng buộc tổng ngày = số ngày làm việc; từ chối bắt buộc nhập lý do; hiển thị email liên hệ của nhân viên.
+- **Đồng bộ tra cứu (`syncMissingLookups`):** thay `syncMissingEmailLookups`, backfill cả `emailHash` và `nameHash` cho đơn cũ (tối đa 20 đơn/lượt, không chặn UI). Các luồng `receiveLeaveRequest`, `approveLeaveRequest`, `rejectLeaveRequest`, `markHospitalCertReceived` đều cập nhật cả 2 bản tra cứu.
+- **Không gửi email:** theo yêu cầu mới, đã bỏ toàn bộ backend email (thư mục `functions/`, cấu hình `functions` trong `firebase.json`, secret Resend). Nhân viên tự tra cứu kết quả trong app. Email nhân viên nhập chỉ dùng làm khoá tra cứu (`emailLookups`) và để quản lý liên hệ khi cần (`leaveRequestContacts`).
+- **Rules:** nhân viên (kể cả ẩn danh) chỉ được **tạo** đơn `Đang chờ duyệt` gắn đúng `submitterUid`, không được ghi `processedBy`/`processedAt`/`rejectionReason`; chỉ được `get` đơn của chính mình; thêm khối `/nameLookups/{nameHash}/requests`; cho phép tạo contact/emailLookup/nameLookup/thông báo admin trong cùng batch với kiểm tra `getAfter()`.
+- **Đánh đổi đã ghi rõ trong `README.md`:** không đăng nhập nên không chống mạo danh tuyệt đối; tra cứu theo họ tên là "bí mật bằng họ tên" và có thể tắt bằng cách bỏ khối `nameLookups`.
+
+### 2.15 Thông báo đơn mới cho Quản lý: chuông + toast + trang thông báo
+
+- **Chuông trên header (chỉ khi đã đăng nhập Quản lý):** badge số thông báo chưa đọc, mở panel danh sách 30 thông báo gần nhất, bấm một thông báo để nhảy sang **Duyệt đơn chờ** và đánh dấu đã đọc; có nút **Đọc tất cả** và liên kết **Xem tất cả**.
+- **Toast góc dưới phải:** `subscribeLeaveRequests` nhận thêm callback `onAdded` (lọc `docChanges()` type `added` + `status === 'Đang chờ duyệt'`), bỏ qua snapshot đầu tiên và đơn do chính Quản lý tạo hộ; toast hiện tên nhân sự, phòng ban, khoảng ngày, số ngày, nút **Xem đơn** / **Để sau**, tự ẩn sau 12 giây.
+- **Trang Thông báo (`src/components/NotificationsPage.tsx`, tab `notifications`, `managerOnly`):** thống kê chưa đọc/tổng/số đơn chờ, bộ lọc **Tất cả / Chưa đọc**, tìm theo tên hoặc nội dung, hiển thị trạng thái hiện tại của đơn liên quan (`StatusLabel`), nút **Đọc tất cả** và **Mở hàng đợi duyệt**.
+- **Dữ liệu:** dùng lại `/notifications` (`recipientType == 'admin'`) do `submitEmployeeLeaveRequest` ghi trong cùng batch; `subscribeNotifications` / `markNotificationRead` / `markAllNotificationsRead` trước đây là code chết nay đã nối vào App.
+- **Giới hạn:** chỉ hoạt động khi Quản lý đang mở app và đã đăng nhập; không push notification, không service worker, không email. Super admin dùng chung cơ chế `isManager()` nên thấy giống hệt Quản lý.
+
 ---
 
 ## 3. Cấu trúc Firestore & Bảo mật (`firestore.rules`)
@@ -125,10 +145,11 @@
 | `/companyHolidays/{holidayId}` | Lịch ngày nghỉ lễ, nghỉ bù, làm việc bù | Công khai | Chỉ Quản lý |
 | `/dailyOffStatus/{dateKey}` | Danh sách ID nhân sự đang nghỉ phép đã duyệt theo ngày (không PII) | Nhân viên đọc đơn lẻ theo `YYYY-MM-DD`; Quản lý đồng bộ | Chỉ Quản lý |
 | `/monthlyOffStatus/{monthKey}` | Danh sách nhân sự & các ngày nghỉ phép đã duyệt theo tháng (không PII) | Nhân viên đọc đơn lẻ theo `YYYY-MM`; Quản lý đồng bộ | Chỉ Quản lý |
-| `/leaveRequests/{requestId}` | Hồ sơ đơn xin nghỉ phép đầy đủ | Chỉ Quản lý | Tạo & cập nhật chỉ Quản lý; Không cho xóa |
-| `/leaveRequestContacts/{requestId}` | Email liên hệ của đơn nghỉ (tách riêng PII) | Chỉ Quản lý | Chỉ Quản lý (tùy chọn khi nhập email); Không sửa/xóa |
-| `/emailLookups/{emailHash}/requests/{requestId}` | Bản tóm tắt trạng thái theo mã băm email | Quản lý hoặc đúng `emailHash` | Tạo & cập nhật chỉ Quản lý; Không xóa |
-| `/notifications/{notificationId}` | Thông báo nội bộ cho Quản lý | Chỉ Quản lý | Chỉ Quản lý |
+| `/leaveRequests/{requestId}` | Hồ sơ đơn xin nghỉ phép đầy đủ | Quản lý; nhân viên chỉ `get` đơn do chính uid ẩn danh của mình tạo | Quản lý; nhân viên chỉ được **tạo** đơn `Đang chờ duyệt` gắn đúng `submitterUid`; Không cho xóa |
+| `/leaveRequestContacts/{requestId}` | Email liên hệ của đơn nghỉ (tách riêng PII) | Chỉ Quản lý | Người gửi đơn tạo trong cùng batch (khớp `getAfter`); Quản lý đọc; Không sửa/xóa |
+| `/emailLookups/{emailHash}/requests/{requestId}` | Bản tóm tắt trạng thái theo mã băm email | Quản lý hoặc đúng `emailHash` | Quản lý; người gửi tạo trong cùng batch; Không xóa |
+| `/nameLookups/{nameHash}/requests/{requestId}` | Bản tóm tắt trạng thái theo mã băm họ tên đã chuẩn hoá dấu | Quản lý hoặc đúng `nameHash` | Quản lý; người gửi tạo trong cùng batch; Không xóa |
+| `/notifications/{notificationId}` | Thông báo nội bộ cho Quản lý | Chỉ Quản lý | Quản lý; nhân viên chỉ được tạo thông báo `admin` cho đơn do chính mình gửi |
 
 ---
 
@@ -151,6 +172,11 @@
 | `src/components/EmployeeManager.tsx` | Quản lý danh sách nhân viên, avatar, hạn mức phép và tài khoản Quản lý |
 | `src/components/ApprovalHistory.tsx` | Lịch sử đăng ký, phân bổ nghỉ phép & xác nhận nộp bổ sung giấy nghỉ ốm |
 | `src/components/AttendanceToday.tsx` | Tab Hôm nay ai đi làm (lọc phòng ban, tìm tên, trạng thái làm việc trong ngày) |
+| `src/components/EmployeeLeaveRequestForm.tsx` | Form nhân viên tự gửi đơn nghỉ phép không cần đăng nhập |
+| `src/components/EmployeeLeaveLookup.tsx` | Tra cứu đơn của tôi theo email hoặc họ tên đầy đủ |
+| `src/components/LeaveApprovalQueue.tsx` | Hàng đợi duyệt đơn chờ dành cho Quản lý |
+| `src/components/NotificationsPage.tsx` | Trang thông báo của Quản lý (lọc chưa đọc, tìm kiếm, đánh dấu đã đọc) |
+| `README.md` | Hướng dẫn cài đặt, bật Anonymous Auth, deploy rules và mục **Quyền riêng tư** |
 | `src/components/BobbleAvatar.tsx` | 12 mẫu avatar nhân vật SVG với phần đầu lúc lắc tương tác |
 | `firebase.json` | Cấu hình Firebase Hosting (`mvtpdayoff.web.app`) và đường dẫn `firestore.rules` |
 | `firestore.rules` & `firebase-blueprint.json` | Quy tắc bảo mật Firestore và schema dữ liệu đồng bộ |
@@ -159,6 +185,10 @@
 
 ## 5. Trạng thái kiểm thử gần nhất
 
-- `npx eslint firestore.rules`: Đạt (0 lỗi) và đã deploy rules lên Firebase.
-- `npm run lint` (`tsc --noEmit`): Đạt (0 lỗi TypeScript).
+- `npm run lint` (`tsc --noEmit`): Đạt (0 lỗi TypeScript) sau khi thêm luồng nhân viên tự đăng ký + tra cứu.
 - `npm run build` (`vite build`): Đạt (build thành công, sẵn sàng deploy Firebase Hosting).
+- `node -e "JSON.parse(...)"` cho `firebase.json` và `firebase-blueprint.json`: Đạt.
+- `npx eslint firestore.rules`: Đạt (0 lỗi) — **rules mới chưa deploy**, cần chạy `firebase deploy --only firestore:rules`.
+- Chưa chạy kiểm thử ghi dữ liệu thật lên Firestore production (tránh tạo đơn rác); cần bật **Anonymous Auth** và deploy rules trước khi dùng thật.
+- Email: **không dùng** — đã bỏ `functions/` và cấu hình liên quan; không còn endpoint ngoài Firebase.
+- Đã thử mở app ở `localhost:3000`: giao diện render bình thường; khi bấm gửi đơn trên máy chưa bật Anonymous/deploy rules thì hiện đúng thông báo hướng dẫn quản trị viên.
