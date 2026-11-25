@@ -5,7 +5,6 @@ import {
   Check,
   ClipboardCheck,
   Clock,
-  ExternalLink,
   Inbox,
   Mail,
   Search,
@@ -29,7 +28,6 @@ import {
   formatDateVN,
   getHalfDayTimeLabel,
 } from '../utils/dateUtils';
-import { getSafeGoogleDriveHref } from '../utils/urlUtils';
 import { StatusLabel } from './StatusBadge';
 
 interface LeaveApprovalQueueProps {
@@ -167,7 +165,6 @@ function PendingRequestCard({
   const [busy, setBusy] = useState<'approve' | 'reject' | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const driveHref = getSafeGoogleDriveHref(request.attachmentUrl);
   const totalAllocated = ALL_LEAVE_TYPES.reduce(
     (sum, type) => sum + (Number(allocMap[type]) || 0),
     0,
@@ -333,17 +330,6 @@ function PendingRequestCard({
                   .join(' · ')}
               </span>
             </div>
-          )}
-          {driveHref && (
-            <a
-              href={driveHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-teal-700 hover:underline font-medium"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              Xem giấy xác nhận (Google Drive)
-            </a>
           )}
         </div>
 

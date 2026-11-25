@@ -16,7 +16,7 @@
 
 | Mục | Mô tả |
 |---|---|
-| **Đăng ký nghỉ phép** | Chọn họ tên trong danh sách nhân sự, chọn khoảng ngày (tự trừ Thứ 7/Chủ nhật, ngày lễ, cộng ngày OT), nhập lý do/ghi chú. Có thể chọn **"Chỉ nghỉ nửa ngày"** kèm buổi **Sáng** hoặc **Chiều**. Không chọn loại phép — quản lý phân bổ khi duyệt. Có thể đính kèm liên kết Google Drive của giấy xác nhận nghỉ ốm. |
+| **Đăng ký nghỉ phép** | Chọn họ tên trong danh sách nhân sự, chọn khoảng ngày (tự trừ Thứ 7/Chủ nhật, ngày lễ, cộng ngày OT), nhập lý do/ghi chú. Có thể chọn **"Chỉ nghỉ nửa ngày"** kèm buổi **Sáng** hoặc **Chiều**. Không chọn loại phép — quản lý phân bổ khi duyệt. Với nghỉ ốm chỉ cần **tick "đã có giấy xác nhận"**, không nhập link hay tải tệp. |
 | **Hôm nay ai đi làm** | Xem đồng nghiệp đang làm việc / nghỉ phép trong ngày. Người nghỉ nửa buổi vẫn hiện trong danh sách với nhãn buổi nghỉ. **Bấm vào thẻ một người** để xem số ngày phép năm và nghỉ việc riêng còn lại của người đó. |
 | **Ngày nghỉ công ty** | Xem lịch lễ, nghỉ bù, OT của công ty. |
 
@@ -109,7 +109,7 @@ firebase deploy --only hosting
 1. **Không có đăng nhập ⇒ không xác thực được danh tính.** Nhân viên chọn tên mình trong danh sách, nên về lý thuyết một người có thể gửi đơn dưới tên người khác. Đây là đánh đổi có chủ ý để không phải cấp tài khoản cho toàn bộ nhân viên. Nếu cần chặt hơn: bật đăng nhập email/Google cho nhân viên và đổi rules sang so khớp `token.email`.
 2. **Không có tra cứu trạng thái đơn.** Đơn chờ duyệt/từ chối không hiển thị công khai; chỉ đơn **đã duyệt** mới lên lịch nghỉ tháng. Muốn xem trạng thái, nhân viên hỏi quản lý.
 3. **Số ngày còn lại là dữ liệu tổng hợp.** `/leaveSummaries` do quản lý đồng bộ khi mở app; nếu chưa có quản lý nào mở app sau khi duyệt đơn, thẻ quỹ phép có thể chậm cập nhật.
-4. File đính kèm chỉ là **liên kết Google Drive**; app không upload tệp lên Firebase.
+4. Giấy xác nhận y tế chỉ là **một tick xác nhận** ("đã có giấy / chờ bổ sung"); app không nhập link, không upload tệp lên Firebase. Giấy vẫn do nhân viên giữ và đối chiếu trực tiếp với quản lý. Đơn cũ có link Drive vẫn còn trong Firestore nhưng không còn hiển thị trên giao diện.
 5. **Không có email thông báo.** Muốn có email tự động phải thêm Cloud Functions (gói Blaze) + dịch vụ gửi mail; hiện tại chủ động không dùng. Thông báo trong app (chuông + toast) chỉ đến khi quản lý đang mở app và đã đăng nhập; không có push khi app đóng.
 
 ---
@@ -118,7 +118,7 @@ firebase deploy --only hosting
 
 **App gửi gì ra ngoài máy?**
 
-- Chỉ dữ liệu tới **Cloud Firestore** của project `leave-management-vn` (Google Firebase): họ tên, phòng ban, khoảng ngày nghỉ, số ngày, lý do, ghi chú, liên kết Drive (nếu có), trạng thái duyệt, người xử lý, và số ngày phép còn lại.
+- Chỉ dữ liệu tới **Cloud Firestore** của project `leave-management-vn` (Google Firebase): họ tên, phòng ban, khoảng ngày nghỉ, số ngày, lý do, ghi chú, trạng thái giấy xác nhận y tế (có / chờ bổ sung), trạng thái duyệt, người xử lý, và số ngày phép còn lại.
 - **Không** gửi email, không gọi dịch vụ bên thứ ba nào. Không có Google Analytics, không telemetry, không tracking pixel, không quảng cáo, không đọc clipboard, không chụp màn hình, không đọc file trên máy.
 - File Excel được **tạo ngay trong trình duyệt** (`src/utils/excelExport.ts`, ZIP + XML thuần, không thư viện Excel), tải xuống máy bạn; app không upload file đi đâu. Nội dung có lý do/ghi chú của đơn nên chỉ nên lưu ở máy/workspace được phép của công ty.
 

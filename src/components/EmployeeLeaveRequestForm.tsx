@@ -23,7 +23,6 @@ import {
   getHalfDayTimeLabel,
   getTodayKey,
 } from '../utils/dateUtils';
-import { validateGoogleDriveUrl } from '../utils/urlUtils';
 import { VietnameseDatePicker } from './VietnameseDatePicker';
 
 interface EmployeeLeaveRequestFormProps {
@@ -44,7 +43,6 @@ export function EmployeeLeaveRequestForm({
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [hasHospitalCert, setHasHospitalCert] = useState(false);
-  const [attachmentUrl, setAttachmentUrl] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -79,7 +77,6 @@ export function EmployeeLeaveRequestForm({
     setReason('');
     setNote('');
     setHasHospitalCert(false);
-    setAttachmentUrl('');
     setStartDate(today);
     setEndDate(today);
     setHalfDayEnabled(false);
@@ -113,16 +110,6 @@ export function EmployeeLeaveRequestForm({
       return;
     }
 
-    let cleanAttachmentUrl = '';
-    if (attachmentUrl.trim()) {
-      const check = validateGoogleDriveUrl(attachmentUrl);
-      if (!check.valid) {
-        setErrorMsg(check.error || 'Đường dẫn Google Drive không hợp lệ.');
-        return;
-      }
-      cleanAttachmentUrl = check.url;
-    }
-
     setSubmitting(true);
     try {
       const result = await submitEmployeeLeaveRequest({
@@ -139,7 +126,6 @@ export function EmployeeLeaveRequestForm({
         reason: reason.trim(),
         note: note.trim(),
         hasHospitalCert,
-        attachmentUrl: cleanAttachmentUrl,
       });
 
       setSuccess({
@@ -411,8 +397,8 @@ export function EmployeeLeaveRequestForm({
               Giấy xác nhận nghỉ ốm (tuỳ chọn)
             </div>
             <p className="text-[11px] text-slate-500 leading-relaxed">
-              Chỉ điền khi bạn nghỉ ốm và đã có giấy xác nhận của bệnh viện / cơ sở
-              y tế. Quản lý sẽ phân bổ loại phép khi duyệt đơn.
+              Chỉ tick khi bạn nghỉ ốm và đã có giấy xác nhận của bệnh viện / cơ sở
+              y tế. Không cần nhập liên kết hay tải tệp lên hệ thống.
             </p>
             <label className="inline-flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
               <input
@@ -423,27 +409,6 @@ export function EmployeeLeaveRequestForm({
               />
               Tôi đã có giấy xác nhận của bệnh viện / cơ sở y tế
             </label>
-            <div>
-              <label
-                htmlFor="emp-cert-url"
-                className="block text-xs text-slate-600 mb-1"
-              >
-                Liên kết Google Drive của giấy xác nhận (tuỳ chọn)
-              </label>
-              <input
-                id="emp-cert-url"
-                type="url"
-                value={attachmentUrl}
-                onChange={(e) => setAttachmentUrl(e.target.value)}
-                placeholder="https://drive.google.com/..."
-                maxLength={500}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
-              />
-              <p className="text-[11px] text-slate-500 mt-1">
-                Hệ thống chỉ lưu liên kết, không tải tệp lên Firebase. Hãy bật
-                quyền chia sẻ để quản lý mở được.
-              </p>
-            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -487,8 +452,8 @@ export function EmployeeLeaveRequestForm({
 
           <p className="text-[11px] text-slate-500 leading-relaxed">
             Khi gửi đơn, hệ thống lưu họ tên, phòng ban, khoảng ngày nghỉ, lý do,
-            ghi chú và liên kết giấy xác nhận (nếu có) trong Firestore nội bộ của
-            công ty để quản lý duyệt đơn. Không thu thập email, không gửi email
+            ghi chú và việc bạn đã có giấy xác nhận y tế hay không trong Firestore
+            nội bộ của công ty để quản lý duyệt đơn. Không thu thập email, không gửi email
             thông báo và không có dữ liệu nào được gửi tới dịch vụ quảng cáo hay
             theo dõi người dùng.
           </p>

@@ -166,6 +166,13 @@
 - Ba sheet: **Chi tiet ngay nghi** (12 cột, có lý do/ghi chú/mã đơn/người duyệt), **Tong hop nhan vien** (số ngày theo 6 loại phép), **Thong tin** (tháng, giờ công ty, nguồn Firestore nội bộ, thời điểm xuất, ghi chú quyền riêng tư).
 - **Kiểm chứng:** tạo file mẫu bằng `tsx`, mở bằng `zipfile` + `ElementTree` của Python: CRC/ZIP hợp lệ, XML hợp lệ, dòng dữ liệu đúng (ngày 02/11 nửa ngày `0.5`, ngày 03/11 chia `Phép năm 0.5 + Nghỉ việc riêng 0.5`). Đã xoá file test. `npm run lint` + `npm run build` đạt.
 
+### 2.20 Giấy xác nhận y tế gọn còn một tick
+
+- Form nhân viên (`EmployeeLeaveRequestForm.tsx`) bỏ hoàn toàn ô **liên kết Google Drive** và kiểm tra `validateGoogleDriveUrl`; chỉ giữ checkbox **"Tôi đã có giấy xác nhận của bệnh viện / cơ sở y tế"**. Submit không còn ghi `attachmentUrl`.
+- Hàng đợi duyệt (`LeaveApprovalQueue.tsx`) và Lịch sử (`ApprovalHistory.tsx`) bỏ liên kết "Xem giấy xác nhận (Drive)"; thay bằng nhãn **Có giấy xác nhận** / **Chờ bổ sung giấy ốm** như hiện trạng.
+- Xoá `src/utils/urlUtils.ts` (không còn nơi dùng). Giữ các trường `attachmentUrl` / `attachmentName` trong type + rules để đọc đơn cũ, nhưng giao diện không hiển thị.
+- Cập nhật README (tính năng, giới hạn, quyền riêng tư). Không đổi `firestore.rules`, không cần deploy rules.
+
 ---
 
 ## 3. Cấu trúc Firestore & Bảo mật (`firestore.rules`)

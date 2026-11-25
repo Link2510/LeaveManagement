@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Check, ExternalLink, History } from 'lucide-react';
+import { Check, History } from 'lucide-react';
 import type { LeaveRequestItem, ManagerAccount } from '../types/leave';
 import { markHospitalCertReceived } from '../services/firestoreService';
 import { formatDateTimeVN, formatDateVN } from '../utils/dateUtils';
 import { resolveManagerName } from '../utils/managerUtils';
-import { getSafeGoogleDriveHref } from '../utils/urlUtils';
 import { StatusLabel } from './StatusBadge';
 
 interface ApprovalHistoryProps {
@@ -106,7 +105,6 @@ export function ApprovalHistory({
               </tr>
             ) : (
               processedList.map((req) => {
-                const driveHref = getSafeGoogleDriveHref(req.attachmentUrl);
                 return (
                   <tr key={req.id} className="hover:bg-slate-50/70">
                     <td className="py-3.5 px-6">
@@ -136,20 +134,6 @@ export function ApprovalHistory({
                       {req.hasHospitalCert && (
                         <div className="text-emerald-700 font-medium">
                           Có giấy xác nhận
-                        </div>
-                      )}
-
-                      {driveHref && (
-                        <div>
-                          <a
-                            href={driveHref}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-teal-700 hover:underline font-medium"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            Xem giấy xác nhận (Drive)
-                          </a>
                         </div>
                       )}
 
