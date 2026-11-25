@@ -166,6 +166,14 @@
 - Ba sheet: **Chi tiet ngay nghi** (12 cột, có lý do/ghi chú/mã đơn/người duyệt), **Tong hop nhan vien** (số ngày theo 6 loại phép), **Thong tin** (tháng, giờ công ty, nguồn Firestore nội bộ, thời điểm xuất, ghi chú quyền riêng tư).
 - **Kiểm chứng:** tạo file mẫu bằng `tsx`, mở bằng `zipfile` + `ElementTree` của Python: CRC/ZIP hợp lệ, XML hợp lệ, dòng dữ liệu đúng (ngày 02/11 nửa ngày `0.5`, ngày 03/11 chia `Phép năm 0.5 + Nghỉ việc riêng 0.5`). Đã xoá file test. `npm run lint` + `npm run build` đạt.
 
+### 2.22 Thêm sheet lịch nghỉ dạng lưới vào file Excel
+
+- Theo yêu cầu "xuất excel có thể thêm phần lịch nghỉ giống trên web": bổ sung sheet thứ 4 **"Lich nghi thang"**, dựng từ `getMonthCalendarCells(year, monthIndex)` nên bố cục Thứ 2 → Chủ nhật y hệt giao diện `MonthlyCalendar`.
+- Mỗi ô là một ngày; nếu có nghỉ thì trong ô ghi `ngày/tháng`, số người nghỉ, tên từng nhân sự (kèm `[Sáng 08:15–12:15]` / `[Chiều 13:30–17:30]` nếu nửa ngày) và phân bổ loại phép trong ngày đó. Ngày lễ/tết thêm tiêu đề; ngày OT ghi `OT`; cuối tuần ghi `Cuối tuần`; ô ngoài tháng để trống.
+- Mở rộng bộ style OOXML (6 font / 6 fill / 2 border / 6 cellXfs) để tô màu: xanh lá = có nghỉ, hồng = lễ, xanh dương = OT, xám = cuối tuần; bật `wrapText`, chiều cao dòng 96. `sheetXml` nhận thêm `CellStyleFn` và `rowHeight`.
+- Cập nhật `[Content_Types].xml`, `workbook.xml`, `workbook.xml.rels` cho sheet4, và dòng "Sheet lịch" trong sheet Thông tin. Không đổi `firestore.rules`.
+- **Kiểm chứng:** file mẫu có 9 part ZIP, `testzip()` = None, mọi XML parse được; sheet4 đúng ô 02/11 (xanh lá, text nửa ngày) và 04/11 (hồng, "Lễ testing"). `npm run lint` + `npm run build` đạt; file test đã xoá.
+
 ### 2.20 Giấy xác nhận y tế gọn còn một tick
 
 - Form nhân viên (`EmployeeLeaveRequestForm.tsx`) bỏ hoàn toàn ô **liên kết Google Drive** và kiểm tra `validateGoogleDriveUrl`; chỉ giữ checkbox **"Tôi đã có giấy xác nhận của bệnh viện / cơ sở y tế"**. Submit không còn ghi `attachmentUrl`.

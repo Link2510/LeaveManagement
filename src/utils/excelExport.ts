@@ -7,6 +7,7 @@ import type {
 } from '../types/leave';
 import {
   formatDateTimeVN,
+  getMonthCalendarCells,
   getWeekdayLabelVN,
   isWorkingDay,
   toDateKey,
@@ -144,6 +145,73 @@ function buildDetailRows(input: MonthlyLeaveExportInput): DetailRow[] {
   return rows;
 }
 
+/* ---------- Calendar sheet ---------- */
+
+interface CalendarCellData {
+  date: string;
+  dayNumber: number;
+  isCurrentMonth: boolean;
+  isWeekend: boolean;
+  isHoliday: boolean;
+  holidayTitle: string;
+  isMakeupWorkday: boolean;
+  leaveText: string;
+  mark: string;
+}
+
+function buildCalendarCells(
+  rows: DetailRow[],
+  holidays: CompanyHoliday[],
+  year: number,
+  monthIndex: number,
+): CalendarCellData[] {
+  const holidayMap = new Map<string, CompanyHoliday>();
+  for (const h of holidays) holidayMap.set(h.date, h);
+
+  const byDate = new Map<string, DetailRow[]>();
+  for (const row of rows) {
+    const list = byDate.get(row.date) || [];
+    list.push(row);
+    byDate.set(row.date, list);
+  }
+
+  return getMonthCalendarCells(year, monthIndex).map((cell) => {
+    const holiday = holidayMap.get(cell.dateKey);
+    const isHoliday = Boolean(holiday && holiday.category !== 'Ngày làm việc bù');
+    const isMakeupWorkday = holiday?.category === 'Ngày làm việc bù';
+    const dayRows = cell.isCurrentMonth ? byDate.get(cell.dateKey) || [] : [];
+    const leaveText = dayRows
+      .map((row) => {
+        const parts = row.allocations.map((a) => `${a.type} (${a.days} ngày)`).join(', ');
+        return `${row.employeeName}${row.session ? ` [${sessionLabel(row.session)}]` : ''}: ${parts}`;
+      })
+      .join('\n');
+
+    let mark = '';
+    if (isHoliday) {
+      mark = 'Nghỉ công ty';
+    } else if (isMakeupWorkday) {
+      mark = 'OT';
+    } else if (cell.isWeekend) {
+      mark = 'Cuối tuần';
+    } else if (dayRows.length > 0) {
+      mark = dayRows.length === 1 ? '1 người nghỉ' : `${dayRows.length} người nghỉ`;
+    }
+
+    return {
+      date: cell.dateKey,
+      dayNumber: cell.dayNumber,
+      isCurrentMonth: cell.isCurrentMonth,
+      isWeekend: cell.isWeekend,
+      isHoliday,
+      holidayTitle: holiday?.title || '',
+      isMakeupWorkday,
+      leaveText,
+      mark,
+    };
+  });
+}
+
 /* ---------- XLSX writer ---------- */
 
 function xmlEscape(value: string): string {
@@ -168,8 +236,14 @@ function columnName(index: number): string {
 
 type XlsxValue = string | number;
 type XlsxRow = XlsxValue[];
+type CellStyleFn = (row: number, col: number) => number | undefined;
 
-function sheetXml(rows: XlsxRow[], widths: number[]): string {
+function sheetXml(
+  rows: XlsxRow[],
+  widths: number[],
+  styleFn?: CellStyleFn,
+  rowHeight?: number,
+): string {
   const cols = widths
     .map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`)
     .join('');
@@ -178,17 +252,21 @@ function sheetXml(rows: XlsxRow[], widths: number[]): string {
       const cells = row
         .map((value, colIndex) => {
           const ref = `${columnName(colIndex)}${rowIndex + 1}`;
-          const style = rowIndex === 0 ? ' s="1"' : '';
+          const explicitStyle = styleFn?.(rowIndex, colIndex);
+          const styleIndex = explicitStyle ?? (rowIndex === 0 ? 1 : 0);
+          const style = ` s="${styleIndex}"`;
           if (typeof value === 'number') {
             return `<c r="${ref}"${style}><v>${value}</v></c>`;
           }
           if (value === '') return `<c r="${ref}"${style}/>`;
           return `<c r="${ref}"${style} t="inlineStr"><is><t xml:space="preserve">${xmlEscape(
             value,
-          )}</t></is></c>`;
+          ).replace(/\n/g, '&#10;')}</t></is></c>`;
         })
         .join('');
-      return `<row r="${rowIndex + 1}">${cells}</row>`;
+      const heightAttr =
+        rowHeight && rowIndex > 0 ? ` ht="${rowHeight}" customHeight="1"` : '';
+      return `<row r="${rowIndex + 1}"${heightAttr}>${cells}</row>`;
     })
     .join('');
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -196,19 +274,29 @@ function sheetXml(rows: XlsxRow[], widths: number[]): string {
 }
 
 const CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet4.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
 
 const ROOT_RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
 
 const WORKBOOK = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Chi tiet ngay nghi" sheetId="1" r:id="rId1"/><sheet name="Tong hop nhan vien" sheetId="2" r:id="rId2"/><sheet name="Thong tin" sheetId="3" r:id="rId3"/></sheets></workbook>`;
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Chi tiet ngay nghi" sheetId="1" r:id="rId1"/><sheet name="Tong hop nhan vien" sheetId="2" r:id="rId2"/><sheet name="Thong tin" sheetId="3" r:id="rId3"/><sheet name="Lich nghi thang" sheetId="4" r:id="rId4"/></sheets></workbook>`;
 
 const WORKBOOK_RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet4.xml"/><Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
 
 const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs></styleSheet>`;
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="6"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><color rgb="FF9F1239"/><sz val="11"/><name val="Calibri"/></font><font><color rgb="FF3730A3"/><sz val="11"/><name val="Calibri"/></font><font><color rgb="FF065F46"/><sz val="11"/><name val="Calibri"/></font><font><color rgb="FF64748B"/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF1F5F9"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFCE7F3"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE0E7FF"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD1FAE5"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD6DEE5"/></left><right style="thin"><color rgb="FFD6DEE5"/></right><top style="thin"><color rgb="FFD6DEE5"/></top><bottom style="thin"><color rgb="FFD6DEE5"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="5" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="3" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="4" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs></styleSheet>`;
+
+/** Style index dùng cho ô lịch: 0 mặc định, 1 header, 2 cuối tuần/ngoài tháng, 3 lễ, 4 OT, 5 có nghỉ phép. */
+function calendarStyle(cell: CalendarCellData): number {
+  if (!cell.isCurrentMonth) return 2;
+  if (cell.isHoliday) return 3;
+  if (cell.isMakeupWorkday) return 4;
+  if (cell.isWeekend) return 2;
+  if (cell.leaveText) return 5;
+  return 0;
+}
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -388,10 +476,31 @@ export function exportMonthlyLeaveExcel(input: MonthlyLeaveExportInput): number 
     ['Tổng số ngày nghỉ', Number(rows.reduce((sum, r) => sum + r.days, 0).toFixed(2))],
     ['Giờ làm việc', '08:15–12:15; nghỉ trưa 12:15–13:30; 13:30–17:30'],
     ['Phạm vi', 'Chỉ đơn đã duyệt có ngày làm việc trong tháng được chọn'],
+    [
+      'Sheet lịch',
+      'Sheet "Lich nghi thang" là lưới ngày Thứ 2–Chủ nhật giống giao diện web: ô có nghỉ phép (xanh lá), lễ (hồng), OT (xanh dương), cuối tuần (xám); trong ô có tên nhân sự và loại phép.',
+    ],
     ['Nguồn', 'LeaveManagement – Firestore nội bộ (project leave-management-vn)'],
     ['Xuất lúc', new Date().toLocaleString('vi-VN')],
     ['Quyền riêng tư', 'Không chứa email; không gửi dữ liệu ra dịch vụ bên ngoài'],
   ];
+
+  const calendarCells = buildCalendarCells(rows, input.holidays, input.year, input.monthIndex);
+  const calendarRows: XlsxRow[] = [
+    ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7 (Nghỉ)', 'Chủ nhật (Nghỉ)'],
+  ];
+  for (let i = 0; i < calendarCells.length; i += 7) {
+    calendarRows.push(
+      calendarCells.slice(i, i + 7).map((cell) => {
+        if (!cell.isCurrentMonth) return '';
+        const parts = [`${cell.dayNumber}/${String(input.monthIndex + 1).padStart(2, '0')}`];
+        if (cell.mark) parts.push(cell.mark);
+        if (cell.holidayTitle) parts.push(cell.holidayTitle);
+        if (cell.leaveText) parts.push(cell.leaveText);
+        return parts.join('\n');
+      }),
+    );
+  }
 
   const files = [
     xmlFile('[Content_Types].xml', CONTENT_TYPES),
@@ -408,6 +517,15 @@ export function exportMonthlyLeaveExcel(input: MonthlyLeaveExportInput): number 
       sheetXml(summaryRows, [22, 12, 12, 16, 12, 14, 18, 12, 14]),
     ),
     xmlFile('xl/worksheets/sheet3.xml', sheetXml(infoRows, [24, 70])),
+    xmlFile(
+      'xl/worksheets/sheet4.xml',
+      sheetXml(
+        calendarRows,
+        [22, 22, 22, 22, 22, 22, 22],
+        (row, col) => (row === 0 ? 1 : calendarStyle(calendarCells[(row - 1) * 7 + col])),
+        96,
+      ),
+    ),
   ];
 
   const blob = new Blob([buildZip(files) as BlobPart], {

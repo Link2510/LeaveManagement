@@ -36,7 +36,7 @@
 - **Phân bổ nghỉ cho nhân viên**: quản lý tạo đơn trực tiếp (trừ quỹ phép ngay).
 - Tab **"Đăng ký nghỉ phép"** chỉ hiện ở chế độ **Nhân viên**; khi đăng nhập Quản lý thì ẩn đi (muốn xem lại dùng ô "Chế độ hiển thị" → "Nhân viên"). Quản lý dùng tab riêng **"Phân bổ nghỉ cho nhân viên"** và **"Duyệt đơn chờ"**.
 - **Bảng thống kê**, **Lịch nghỉ tháng**, **Quản lý nhân sự**, **Lịch sử nghỉ phép**, **Ngày nghỉ công ty**.
-- **Xuất Excel theo tháng**: trong **Lịch nghỉ tháng**, bấm **"Xuất Excel tháng này"** để tải file `NghiPhep_YYYY-MM.xlsx` phục vụ lưu trữ/đối chiếu. File có 3 sheet: **Chi tiết ngày nghỉ** (mỗi ngày làm việc một dòng: ngày, thứ, nhân viên, phòng ban, buổi nghỉ, số ngày, loại phép phân bổ, lý do, bàn giao, mã đơn, người duyệt, thời điểm duyệt), **Tổng hợp theo nhân viên** (số ngày từng loại phép) và **Thông tin** (tháng, giờ làm việc, nguồn dữ liệu, thời điểm xuất). Chỉ gồm đơn **đã duyệt** có ngày làm việc trong tháng đang xem.
+- **Xuất Excel theo tháng**: trong **Lịch nghỉ tháng**, bấm **"Xuất Excel tháng này"** để tải file `NghiPhep_YYYY-MM.xlsx` phục vụ lưu trữ/đối chiếu. File có 4 sheet: **Chi tiết ngày nghỉ** (mỗi ngày làm việc một dòng: ngày, thứ, nhân viên, phòng ban, buổi nghỉ, số ngày, loại phép phân bổ, lý do, bàn giao, mã đơn, người duyệt, thời điểm duyệt), **Tổng hợp theo nhân viên** (số ngày từng loại phép), **Thông tin** (tháng, giờ làm việc, nguồn dữ liệu, thời điểm xuất) và **Lịch nghỉ tháng** — lưới Thứ 2–Chủ nhật giống hệt trên web: ô có nghỉ phép (xanh lá, kèm tên nhân sự + loại phép), ngày lễ (hồng), OT (xanh dương), cuối tuần (xám). Chỉ gồm đơn **đã duyệt** có ngày làm việc trong tháng đang xem.
 
 > Thông báo chỉ hoạt động **trong app khi quản lý đang đăng nhập**. Không có email, không có push khi app đóng.
 
