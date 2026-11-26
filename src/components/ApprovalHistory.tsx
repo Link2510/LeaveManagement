@@ -116,15 +116,12 @@ export function ApprovalHistory({
               <th className="py-3 px-4">Trạng thái</th>
               <th className="py-3 px-4">Phân bổ &amp; giấy xác nhận</th>
               <th className="py-3 px-6 whitespace-nowrap">Người &amp; thời điểm ghi nhận</th>
-              {isSuperAdmin && (
-                <th className="py-3 px-4 whitespace-nowrap text-right">Thao tác</th>
-              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-sm">
             {processedList.length === 0 ? (
               <tr>
-                <td colSpan={isSuperAdmin ? 7 : 6} className="py-12 text-center text-slate-500">
+                <td colSpan={6} className="py-12 text-center text-slate-500">
                   Chưa có dữ liệu nghỉ phép phù hợp trong mục này.
                 </td>
               </tr>
@@ -135,6 +132,18 @@ export function ApprovalHistory({
                     <td className="py-3.5 px-6">
                       <div className="font-medium text-slate-900">{req.employeeName}</div>
                       <div className="text-xs text-slate-500">{req.department}</div>
+                      {isSuperAdmin && (
+                        <button
+                          type="button"
+                          disabled={deletingId !== null}
+                          onClick={() => void handleDelete(req)}
+                          title="Xoá vĩnh viễn đơn này khỏi Firestore"
+                          className="mt-2 inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-red-700 bg-white border border-red-200 hover:bg-red-50 disabled:opacity-50 rounded-md whitespace-nowrap"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          {deletingId === req.id ? 'Đang xoá...' : 'Xoá đơn'}
+                        </button>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 font-mono-num text-xs text-slate-700">
                       {Array.isArray(req.dates) && req.dates.length > 0
@@ -185,20 +194,7 @@ export function ApprovalHistory({
                         {formatDateTimeVN(req.processedAt)}
                       </div>
                     </td>
-                    {isSuperAdmin && (
-                      <td className="py-3.5 px-4 text-right">
-                        <button
-                          type="button"
-                          disabled={deletingId !== null}
-                          onClick={() => void handleDelete(req)}
-                          title="Xoá vĩnh viễn đơn này khỏi Firestore"
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-white border border-red-200 hover:bg-red-50 disabled:opacity-50 rounded-lg whitespace-nowrap"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          {deletingId === req.id ? 'Đang xoá...' : 'Xoá đơn'}
-                        </button>
-                      </td>
-                    )}
+
                   </tr>
                 );
               })
