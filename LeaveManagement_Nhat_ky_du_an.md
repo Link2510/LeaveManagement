@@ -181,6 +181,15 @@
 - Autoplay policy: `unlockNotificationSound()` được gọi trong hai handler đăng nhập (Google / username-password) và ở listener `pointerdown`/`keydown` đầu tiên sau khi đã đăng nhập Quản lý. Nếu audio context vẫn `suspended` thì bỏ qua tiếng, không ảnh hưởng luồng dữ liệu.
 - UI: trong panel chuông thêm dòng **"Tiếng báo khi có đơn mới"** với nút **Đang bật / Đã tắt**; bật lại sẽ phát một tiếng thử ngay (user gesture). Cập nhật README mục thông báo + quyền riêng tư. Không đổi rules.
 
+### 2.24 Nhân viên chọn nhiều ngày rời rạc + ẩn tick giấy xác nhận
+
+- `EmployeeLeaveRequestForm.tsx` viết lại phần chọn ngày: thay cặp "Từ ngày / Đến hết ngày" bằng bộ chọn **một ngày + nút "Thêm ngày"**. Mỗi ngày thêm là một chip riêng, có select **Cả ngày / Sáng 08:15–12:15 / Chiều 13:30–17:30** và nút bỏ. Cho phép các ngày **không liên tiếp**, tối đa 31 ngày/đơn; tự bỏ trùng, bỏ cuối tuần/nghỉ công ty.
+- Tổng `workingDays = Σ(1 hoặc 0,5)`; `startDate`/`endDate` vẫn ghi là min/max để tương thích dữ liệu cũ, nhưng nguồn sự thật là mảng mới `dates` + `halfDays`. Submit không còn gửi `hasHospitalCert: true` (luôn `false`) và **xoá hẳn block checkbox giấy xác nhận** khỏi form nhân viên.
+- `leave.ts` thêm `dates?: string[]`, `halfDays?: HalfDayInfo[]`; giữ `halfDay` cho đơn cũ/form Quản lý. `dateUtils.ts` thêm `resolveSelectedLeaveDays`, `getRequestHalfDayMap`, `leaveRequestCoversDate`.
+- `firestoreService.ts`: `submitEmployeeLeaveRequest` nhận `dates`/`halfDays`, chuẩn hoá (sort, unique, tối đa 31) và ghi vào đơn + nội dung thông báo cho Quản lý; `mapRequestDoc` đọc lại; `approveLeaveRequest` nhận thêm override `halfDays`; `syncAllDailyOffStatuses` lặp theo `dates` (nếu có) thay vì đoạn liên tiếp.
+- Cập nhật để nhận diện ngày rời rạc: `MonthlyCalendar`, `HolidayManager`, `AttendanceToday`, `LeaveApprovalQueue` (hiện danh sách ngày + chọn buổi cho từng ngày nửa), `ApprovalHistory`, `excelExport`. Rules chấp nhận `dates`/`halfDays` và cho phép sửa chúng lúc duyệt; blueprint cập nhật. `firebase deploy --dry-run` biên dịch rules thành công.
+- **Kiểm chứng:** `npm run lint` + `npm run build` đạt; file Excel mẫu với `dates: [02,05,09]/2026-11`, `halfDays: 05/Chiều` có đúng 3 dòng chi tiết, ZIP/XML hợp lệ; file test đã xoá.
+
 ### 2.20 Giấy xác nhận y tế gọn còn một tick
 
 - Form nhân viên (`EmployeeLeaveRequestForm.tsx`) bỏ hoàn toàn ô **liên kết Google Drive** và kiểm tra `validateGoogleDriveUrl`; chỉ giữ checkbox **"Tôi đã có giấy xác nhận của bệnh viện / cơ sở y tế"**. Submit không còn ghi `attachmentUrl`.

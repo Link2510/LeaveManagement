@@ -27,7 +27,7 @@ import {
   getMonthCalendarCells,
   getTodayKey,
   getWeekdayLabelVN,
-  isDateInRange,
+  leaveRequestCoversDate,
   isWorkingDay,
   parseDateKey,
   toDateKey,
@@ -212,7 +212,7 @@ export function HolidayManager({
       for (const req of managerRequests) {
         if (
           req.status === 'Đã duyệt' &&
-          isDateInRange(selectedDay, req.startDate, req.endDate) &&
+          leaveRequestCoversDate(req, selectedDay) &&
           req.halfDay?.date !== selectedDay
         ) {
           idSet.add(req.employeeId);

@@ -13,8 +13,8 @@ import {
   getHalfDayTimeLabel,
   getTodayKey,
   getWeekdayLabelVN,
-  isDateInRange,
   isWorkingDay,
+  leaveRequestCoversDate,
 } from '../utils/dateUtils';
 import { BobbleAvatar, getEmployeeAvatarId } from './BobbleAvatar';
 
@@ -79,12 +79,12 @@ export function AttendanceToday({
     }
     if (isManagerView) {
       for (const req of managerRequests) {
-        if (
-          req.status === 'Đã duyệt' &&
-          req.halfDay?.date === todayKey &&
-          (req.halfDay.session === 'Sáng' || req.halfDay.session === 'Chiều')
-        ) {
-          map.set(req.employeeId, req.halfDay.session);
+        if (req.status !== 'Đã duyệt') continue;
+        const halfSession =
+          (req.halfDays || []).find((item) => item.date === todayKey)?.session ||
+          (req.halfDay?.date === todayKey ? req.halfDay.session : undefined);
+        if (halfSession === 'Sáng' || halfSession === 'Chiều') {
+          map.set(req.employeeId, halfSession);
         }
       }
     }
@@ -97,7 +97,8 @@ export function AttendanceToday({
       for (const req of managerRequests) {
         if (
           req.status === 'Đã duyệt' &&
-          isDateInRange(todayKey, req.startDate, req.endDate) &&
+          leaveRequestCoversDate(req, todayKey) &&
+          !(req.halfDays || []).some((item) => item.date === todayKey) &&
           req.halfDay?.date !== todayKey
         ) {
           set.add(req.employeeId);

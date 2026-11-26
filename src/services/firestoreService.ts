@@ -47,7 +47,13 @@ import {
   type ManagerAccount,
   type MonthlyOffEntry,
 } from '../types/leave';
-import { getTodayKey, isWorkingDay, parseDateKey, toDateKey } from '../utils/dateUtils';
+import {
+  getRequestHalfDayMap,
+  getTodayKey,
+  isWorkingDay,
+  parseDateKey,
+  toDateKey,
+} from '../utils/dateUtils';
 
 function generateSafeId(prefix: string): string {
   const rand = Math.random().toString(36).slice(2, 10);
@@ -587,6 +593,17 @@ function mapRequestDoc(id: string, data: Record<string, unknown>): LeaveRequestI
         }))
       : [],
     halfDay: parseHalfDay(data.halfDay),
+    dates: Array.isArray(data.dates)
+      ? (data.dates as unknown[])
+          .filter((d): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d))
+          .slice(0, 31)
+      : undefined,
+    halfDays: Array.isArray(data.halfDays)
+      ? (data.halfDays as unknown[])
+          .map((item) => parseHalfDay(item))
+          .filter((item): item is HalfDayInfo => Boolean(item))
+          .slice(0, 31)
+      : undefined,
     hasHospitalCert: Boolean(data.hasHospitalCert),
     hospitalCertPending: Boolean(data.hospitalCertPending),
     attachmentName: String(data.attachmentName || ''),
@@ -772,7 +789,8 @@ export interface EmployeeLeaveSubmissionInput {
   startDate: string;
   endDate: string;
   workingDays: number;
-  halfDay?: HalfDayInfo;
+  dates: string[];
+  halfDays?: HalfDayInfo[];
   reason: string;
   note: string;
   hasHospitalCert: boolean;
@@ -795,6 +813,24 @@ export async function submitEmployeeLeaveRequest(
   }
 
   const workingDays = Math.max(0.5, Math.min(365, Number(input.workingDays) || 0));
+  const cleanDates = Array.from(
+    new Set(
+      (input.dates || []).filter(
+        (d): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d),
+      ),
+    ),
+  )
+    .sort()
+    .slice(0, 31);
+  if (cleanDates.length === 0) {
+    throw new Error('Vui lòng chọn ít nhất một ngày nghỉ.');
+  }
+  const startDate = cleanDates[0];
+  const endDate = cleanDates[cleanDates.length - 1];
+  const cleanHalfDays: HalfDayInfo[] = (input.halfDays || [])
+    .map((item) => cleanHalfDay(item))
+    .filter((item): item is HalfDayInfo => Boolean(item) && cleanDates.includes(item!.date))
+    .slice(0, 31);
   const cleanReason = clampString(input.reason, 500);
   if (cleanReason.length < 2) {
     throw new Error('Vui lòng nhập lý do nghỉ phép (tối thiểu 2 ký tự).');
@@ -833,14 +869,15 @@ export async function submitEmployeeLeaveRequest(
       employeeId,
       employeeName,
       department: input.department,
-      startDate: clampString(input.startDate, 10),
-      endDate: clampString(input.endDate, 10),
+      startDate,
+      endDate,
+      dates: cleanDates,
       workingDays,
       reason: cleanReason,
       note: cleanNote,
       status: 'Đang chờ duyệt',
       allocations: [],
-      ...(cleanHalfDay(input.halfDay) ? { halfDay: cleanHalfDay(input.halfDay) } : {}),
+      ...(cleanHalfDays.length > 0 ? { halfDays: cleanHalfDays } : {}),
       hasHospitalCert,
       hospitalCertPending: false,
       attachmentName: '',
@@ -858,7 +895,7 @@ export async function submitEmployeeLeaveRequest(
       recipientUid: 'admin',
       requestId: reqId,
       title: `Đơn nghỉ mới chờ duyệt: ${employeeName}`,
-      message: `${employeeName} (${input.department}) đã tự gửi đơn nghỉ ${workingDays} ngày (${input.startDate} → ${input.endDate}).`,
+      message: `${employeeName} (${input.department}) đã tự gửi đơn nghỉ ${workingDays} ngày vào ${cleanDates.length} ngày: ${cleanDates.join(', ')}.`,
       isRead: false,
       createdAt: serverTimestamp(),
     });
@@ -923,6 +960,7 @@ export async function approveLeaveRequest(
   managerLabel: string,
   hospitalCertPending = false,
   halfDay?: HalfDayInfo,
+  halfDays?: HalfDayInfo[],
 ): Promise<void> {
   const notifId = generateSafeId('notif');
   const nowIso = new Date().toISOString();
@@ -941,6 +979,14 @@ export async function approveLeaveRequest(
       allocations: cleanAllocations,
       ...(cleanHalfDay(halfDay ?? request.halfDay)
         ? { halfDay: cleanHalfDay(halfDay ?? request.halfDay) }
+        : {}),
+      ...(halfDays
+        ? {
+            halfDays: halfDays
+              .map((item) => cleanHalfDay(item))
+              .filter((item): item is HalfDayInfo => Boolean(item))
+              .slice(0, 31),
+          }
         : {}),
       hasHospitalCert: Boolean(hasHospitalCert),
       hospitalCertPending: Boolean(hospitalCertPending),
@@ -1246,47 +1292,55 @@ export async function syncAllDailyOffStatuses(
     const empId = req.employeeId.trim();
     if (!empId || empId.length > 128) continue;
 
-    const start = parseDateKey(req.startDate);
-    const end = parseDateKey(req.endDate);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) continue;
-
-    const cursor = new Date(start);
-    let safety = 0;
-    while (cursor <= end && safety < 400) {
-      safety += 1;
-      const dateKey = toDateKey(cursor);
-      if (isWorkingDay(dateKey, holidayMap)) {
-        if (!desiredByDate.has(dateKey)) desiredByDate.set(dateKey, new Set<string>());
-        if (req.halfDay?.date === dateKey && (req.halfDay.session === 'Sáng' || req.halfDay.session === 'Chiều')) {
-          let halfMap = desiredHalfByDate.get(dateKey);
-          if (!halfMap) {
-            halfMap = new Map<string, HalfDaySession>();
-            desiredHalfByDate.set(dateKey, halfMap);
-          }
-          halfMap.set(empId, req.halfDay.session);
-        } else {
-          let daySet = desiredByDate.get(dateKey);
-          if (!daySet) {
-            daySet = new Set<string>();
-            desiredByDate.set(dateKey, daySet);
-          }
-          daySet.add(empId);
-        }
-
-        const monthKey = dateKey.slice(0, 7);
-        let monthMap = desiredByMonth.get(monthKey);
-        if (!monthMap) {
-          monthMap = new Map<string, Set<string>>();
-          desiredByMonth.set(monthKey, monthMap);
-        }
-        let empDates = monthMap.get(empId);
-        if (!empDates) {
-          empDates = new Set<string>();
-          monthMap.set(empId, empDates);
-        }
-        empDates.add(dateKey);
+    const halfMapReq = getRequestHalfDayMap(req);
+    const dateKeys: string[] = [];
+    if (Array.isArray(req.dates) && req.dates.length > 0) {
+      dateKeys.push(...Array.from(new Set(req.dates)).sort());
+    } else {
+      const start = parseDateKey(req.startDate);
+      const end = parseDateKey(req.endDate);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) continue;
+      const cursor = new Date(start);
+      let safety = 0;
+      while (cursor <= end && safety < 400) {
+        safety += 1;
+        dateKeys.push(toDateKey(cursor));
+        cursor.setDate(cursor.getDate() + 1);
       }
-      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    for (const dateKey of dateKeys) {
+      if (!isWorkingDay(dateKey, holidayMap)) continue;
+      if (!desiredByDate.has(dateKey)) desiredByDate.set(dateKey, new Set<string>());
+      const halfSession = halfMapReq[dateKey];
+      if (halfSession) {
+        let halfMap = desiredHalfByDate.get(dateKey);
+        if (!halfMap) {
+          halfMap = new Map<string, HalfDaySession>();
+          desiredHalfByDate.set(dateKey, halfMap);
+        }
+        halfMap.set(empId, halfSession);
+      } else {
+        let daySet = desiredByDate.get(dateKey);
+        if (!daySet) {
+          daySet = new Set<string>();
+          desiredByDate.set(dateKey, daySet);
+        }
+        daySet.add(empId);
+      }
+
+      const monthKey = dateKey.slice(0, 7);
+      let monthMap = desiredByMonth.get(monthKey);
+      if (!monthMap) {
+        monthMap = new Map<string, Set<string>>();
+        desiredByMonth.set(monthKey, monthMap);
+      }
+      let empDates = monthMap.get(empId);
+      if (!empDates) {
+        empDates = new Set<string>();
+        monthMap.set(empId, empDates);
+      }
+      empDates.add(dateKey);
     }
   }
 

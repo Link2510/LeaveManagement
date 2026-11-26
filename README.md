@@ -16,7 +16,7 @@
 
 | Mục | Mô tả |
 |---|---|
-| **Đăng ký nghỉ phép** | Chọn họ tên trong danh sách nhân sự, chọn khoảng ngày (tự trừ Thứ 7/Chủ nhật, ngày lễ, cộng ngày OT), nhập lý do/ghi chú. Có thể chọn **"Chỉ nghỉ nửa ngày"** kèm buổi **Sáng** hoặc **Chiều**. Không chọn loại phép — quản lý phân bổ khi duyệt. Với nghỉ ốm chỉ cần **tick "đã có giấy xác nhận"**, không nhập link hay tải tệp. |
+| **Đăng ký nghỉ phép** | Chọn họ tên, sau đó **chọn từng ngày nghỉ một** (có thể rời rạc, không cần liên tiếp), tối đa 31 ngày/đơn. Ngày cuối tuần/nghỉ công ty bị loại; mỗi ngày chọn **Cả ngày / Sáng 08:15–12:15 / Chiều 13:30–17:30**. Nhập lý do/ghi chú. Không chọn loại phép — quản lý phân bổ khi duyệt. Form nhân viên **không hỏi giấy xác nhận y tế**. |
 | **Hôm nay ai đi làm** | Xem đồng nghiệp đang làm việc / nghỉ phép trong ngày. Người nghỉ nửa buổi vẫn hiện trong danh sách với nhãn buổi nghỉ. **Bấm vào thẻ một người** để xem số ngày phép năm và nghỉ việc riêng còn lại của người đó. |
 | **Ngày nghỉ công ty** | Xem lịch lễ, nghỉ bù, OT của công ty. |
 
@@ -25,7 +25,7 @@
 #### Nghỉ nửa ngày & giờ làm việc
 
 - Giờ công ty: **08:15–12:15** (buổi sáng), nghỉ trưa **12:15–13:30**, **13:30–17:30** (buổi chiều).
-- Khi bật "Chỉ nghỉ nửa ngày", nửa ngày được trừ vào **ngày làm việc đầu tiên** của khoảng nghỉ: một ngày thành **0,5 ngày**, ba ngày thành **2,5 ngày**… Các ô phân bổ loại phép bước **0,5 ngày**.
+- Ở form nhân viên, nửa ngày được chọn **riêng cho từng ngày** (select "Cả ngày / Sáng / Chiều"). Tổng `workingDays` = số ngày chọn × 1 + số ngày nửa buổi × 0,5. Ở form Phân bổ của Quản lý (khoảng ngày), nửa ngày vẫn áp dụng cho ngày làm việc đầu tiên. Các ô phân bổ loại phép bước **0,5 ngày**.
 - Điểm danh ("Hôm nay ai đi làm") ghi nhận người đó làm việc **buổi còn lại**. Thẻ hiển thị `Nghỉ: Sáng 08:15–12:15` hoặc `Nghỉ: Chiều 13:30–17:30`; lịch nghỉ tháng và chi tiết ngày cũng hiện nhãn nửa ngày.
 - Dữ liệu điểm danh nửa ngày là collection `/dailyOffStatus/{ngày}` (`halfDayOff`: chỉ mã nhân sự + buổi nghỉ), không có lý do hay thông tin cá nhân.
 
@@ -119,7 +119,7 @@ firebase deploy --only hosting
 
 **App gửi gì ra ngoài máy?**
 
-- Chỉ dữ liệu tới **Cloud Firestore** của project `leave-management-vn` (Google Firebase): họ tên, phòng ban, khoảng ngày nghỉ, số ngày, lý do, ghi chú, trạng thái giấy xác nhận y tế (có / chờ bổ sung), trạng thái duyệt, người xử lý, và số ngày phép còn lại.
+- Chỉ dữ liệu tới **Cloud Firestore** của project `leave-management-vn` (Google Firebase): họ tên, phòng ban, các ngày nghỉ đã chọn (có thể rời rạc) kèm buổi nửa ngày, số ngày, lý do, ghi chú, trạng thái duyệt, người xử lý, và số ngày phép còn lại. Form nhân viên không gửi trạng thái giấy xác nhận; Quản lý tự đánh dấu khi duyệt đơn nghỉ ốm.
 - **Không** gửi email, không gọi dịch vụ bên thứ ba nào. Không có Google Analytics, không telemetry, không tracking pixel, không quảng cáo, không đọc clipboard, không chụp màn hình, không đọc file trên máy.
 - File Excel được **tạo ngay trong trình duyệt** (`src/utils/excelExport.ts`, ZIP + XML thuần, không thư viện Excel), tải xuống máy bạn; app không upload file đi đâu. Nội dung có lý do/ghi chú của đơn nên chỉ nên lưu ở máy/workspace được phép của công ty.
 - Tiếng báo (`src/utils/notificationSound.ts`) cũng được tổng hợp tại máy bằng Web Audio API; cài đặt Bật/Tắt chỉ lưu trong `localStorage` của trình duyệt (`lm_notification_sound_enabled`). Không microphone, không ghi âm, không phát lại nội dung thông báo.

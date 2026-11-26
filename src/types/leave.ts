@@ -98,8 +98,12 @@ export interface LeaveRequestItem {
   note: string;
   status: LeaveStatus;
   allocations: LeaveAllocation[];
-  /** Nếu có: ngày làm việc đầu tiên trong khoảng chỉ nghỉ nửa buổi. */
+  /** Legacy: một ngày nửa buổi (dùng cho đơn khoảng ngày liên tiếp). */
   halfDay?: HalfDayInfo;
+  /** Danh sách ngày nghỉ rời rạc (nhân viên chọn từng ngày). */
+  dates?: string[];
+  /** Các ngày trong `dates` chỉ nghỉ nửa buổi. */
+  halfDays?: HalfDayInfo[];
   hasHospitalCert: boolean;
   hospitalCertPending?: boolean;
   attachmentName: string;

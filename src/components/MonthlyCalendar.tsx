@@ -12,9 +12,9 @@ import {
   getHalfDayTimeLabel,
   getHolidayCategoryLabel,
   getMonthCalendarCells,
+  leaveRequestCoversDate,
   getTodayKey,
   getWeekdayLabelVN,
-  isDateInRange,
   isWorkingDay,
   parseDateKey,
 } from '../utils/dateUtils';
@@ -62,7 +62,7 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
     if (!isWorkingDay(dateKey, holidayByDate)) {
       return [];
     }
-    return visibleRequests.filter((r) => isDateInRange(dateKey, r.startDate, r.endDate));
+    return visibleRequests.filter((r) => leaveRequestCoversDate(r, dateKey));
   };
 
   const selectedDayIsWorking = useMemo(
@@ -79,7 +79,7 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
     if (!isWorkingDay(selectedDay, holidayByDate)) {
       return [];
     }
-    return visibleRequests.filter((r) => isDateInRange(selectedDay, r.startDate, r.endDate));
+    return visibleRequests.filter((r) => leaveRequestCoversDate(r, selectedDay));
   }, [visibleRequests, selectedDay, holidayByDate]);
 
   const selectedHoliday = holidayByDate.get(selectedDay);

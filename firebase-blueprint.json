@@ -287,6 +287,45 @@
             "date",
             "session"
           ]
+        },
+        "dates": {
+          "type": "array",
+          "description": "Discrete leave dates chosen by employees (may be non-contiguous).",
+          "items": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 10,
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "minItems": 1,
+          "maxItems": 31
+        },
+        "halfDays": {
+          "type": "array",
+          "description": "Dates among `dates` that are only a half working day.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string",
+                "minLength": 10,
+                "maxLength": 10,
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              "session": {
+                "type": "string",
+                "enum": [
+                  "Sáng",
+                  "Chiều"
+                ]
+              }
+            },
+            "required": [
+              "date",
+              "session"
+            ]
+          },
+          "maxItems": 31
         }
       },
       "required": [

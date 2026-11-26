@@ -8,8 +8,10 @@ import type {
 import {
   formatDateTimeVN,
   getMonthCalendarCells,
+  getRequestHalfDayMap,
   getWeekdayLabelVN,
   isWorkingDay,
+  resolveSelectedLeaveDays,
   toDateKey,
 } from './dateUtils';
 
@@ -90,34 +92,35 @@ function buildDetailRows(input: MonthlyLeaveExportInput): DetailRow[] {
   const monthStart = `${monthKey}-01`;
   const lastDay = new Date(year, monthIndex + 1, 0).getDate();
   const monthEnd = `${monthKey}-${String(lastDay).padStart(2, '0')}`;
-  const holidayMap = new Map<string, CompanyHoliday>();
-  for (const h of holidays) holidayMap.set(h.date, h);
-
   const rows: DetailRow[] = [];
   for (const req of requests) {
     if (req.status !== 'Đã duyệt') continue;
     if (!req.startDate || !req.endDate) continue;
     if (req.endDate < monthStart || req.startDate > monthEnd) continue;
 
-    const from = req.startDate > monthStart ? req.startDate : monthStart;
-    const to = req.endDate < monthEnd ? req.endDate : monthEnd;
-    const dates: string[] = [];
-    const dayLoads: number[] = [];
-    const sessions: Array<HalfDaySession | null> = [];
-
-    let cursor = new Date(year, monthIndex, Number(from.slice(8, 10)));
-    let safety = 0;
-    while (toDateKey(cursor) <= to && safety < 40) {
-      safety += 1;
-      const dateKey = toDateKey(cursor);
-      if (isWorkingDay(dateKey, holidayMap)) {
-        const isHalf = req.halfDay?.date === dateKey;
-        dates.push(dateKey);
-        dayLoads.push(isHalf ? 0.5 : 1);
-        sessions.push(isHalf ? req.halfDay?.session || 'Sáng' : null);
+    const sourceDates: string[] = [];
+    if (Array.isArray(req.dates) && req.dates.length > 0) {
+      sourceDates.push(...req.dates);
+    } else {
+      const from = req.startDate > monthStart ? req.startDate : monthStart;
+      const to = req.endDate < monthEnd ? req.endDate : monthEnd;
+      let cursor = new Date(year, monthIndex, Number(from.slice(8, 10)));
+      let safety = 0;
+      while (toDateKey(cursor) <= to && safety < 40) {
+        safety += 1;
+        sourceDates.push(toDateKey(cursor));
+        cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
       }
-      cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
     }
+
+    const selectedDays = resolveSelectedLeaveDays(
+      sourceDates,
+      holidays,
+      getRequestHalfDayMap(req),
+    ).filter((d) => d.date >= monthStart && d.date <= monthEnd);
+    const dayLoads = selectedDays.map((d) => d.days);
+    const sessions = selectedDays.map((d) => d.session);
+    const dates = selectedDays.map((d) => d.date);
 
     const perDay = splitAllocationsByDays(dayLoads, req.allocations);
     dayLoads.forEach((days, idx) => {

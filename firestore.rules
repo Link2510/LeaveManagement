@@ -211,7 +211,7 @@ service cloud.firestore {
           'workingDays', 'reason', 'note', 'status', 'allocations',
           'hasHospitalCert', 'hospitalCertPending', 'attachmentName', 'attachmentUrl',
           'rejectionReason', 'processedBy', 'processedAt', 'emailHash', 'nameHash',
-          'halfDay', 'submitterUid', 'createdAt', 'updatedAt'
+          'halfDay', 'dates', 'halfDays', 'submitterUid', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.employeeId)
         && data.employeeName is string && data.employeeName.size() >= 2 && data.employeeName.size() <= 100
@@ -238,6 +238,26 @@ service cloud.firestore {
           && data.halfDay.keys().hasOnly(['date', 'session'])
           && isValidDateString(data.halfDay.date)
           && data.halfDay.session in ['Sáng', 'Chiều']
+        ))
+        && (!('dates' in data) || (
+          data.dates is list
+          && data.dates.size() >= 1
+          && data.dates.size() <= 31
+          && isValidDateString(data.dates[0])
+        ))
+        && (!('halfDays' in data) || (
+          data.halfDays is list
+          && data.halfDays.size() <= 31
+          && (
+            data.halfDays.size() == 0
+            || (
+              data.halfDays[0] is map
+              && data.halfDays[0].keys().hasAll(['date', 'session'])
+              && data.halfDays[0].keys().hasOnly(['date', 'session'])
+              && isValidDateString(data.halfDays[0].date)
+              && data.halfDays[0].session in ['Sáng', 'Chiều']
+            )
+          )
         ))
         && isValidId(data.submitterUid)
         && data.createdAt is timestamp
@@ -435,8 +455,9 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && incoming().diff(existing()).affectedKeys().hasOnly([
-          'status', 'allocations', 'halfDay', 'hasHospitalCert', 'hospitalCertPending',
-          'rejectionReason', 'processedBy', 'processedAt', 'emailHash', 'nameHash', 'updatedAt'
+          'status', 'allocations', 'halfDay', 'dates', 'halfDays', 'hasHospitalCert',
+          'hospitalCertPending', 'rejectionReason', 'processedBy', 'processedAt',
+          'emailHash', 'nameHash', 'updatedAt'
         ]);
       allow delete: if false;
     }

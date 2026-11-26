@@ -47,6 +47,21 @@ function emptyAllocations(): Record<LeaveType, number> {
   };
 }
 
+function initialHalfSessions(request: LeaveRequestItem): Record<string, HalfDaySession> {
+  const entries = Array.isArray(request.halfDays) && request.halfDays.length > 0
+    ? request.halfDays
+    : request.halfDay
+      ? [request.halfDay]
+      : [];
+  const map: Record<string, HalfDaySession> = {};
+  for (const item of entries) {
+    if (item?.date && (item.session === 'Sáng' || item.session === 'Chiều')) {
+      map[item.date] = item.session;
+    }
+  }
+  return map;
+}
+
 function initialAllocations(request: LeaveRequestItem): Record<LeaveType, number> {
   const map = emptyAllocations();
   const valid = request.allocations.filter((a) => a.days > 0);
@@ -159,11 +174,20 @@ function PendingRequestCard({
   );
   const [rejecting, setRejecting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
-  const [halfSession, setHalfSession] = useState<HalfDaySession>(
-    request.halfDay?.session || 'Sáng',
+  const [halfSessions, setHalfSessions] = useState<Record<string, HalfDaySession>>(
+    () => initialHalfSessions(request),
   );
   const [busy, setBusy] = useState<'approve' | 'reject' | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const halfEntries =
+    Array.isArray(request.halfDays) && request.halfDays.length > 0
+      ? request.halfDays
+      : request.halfDay
+        ? [request.halfDay]
+        : [];
+  const requestDates =
+    Array.isArray(request.dates) && request.dates.length > 0 ? request.dates : [];
 
   const totalAllocated = ALL_LEAVE_TYPES.reduce(
     (sum, type) => sum + (Number(allocMap[type]) || 0),
@@ -194,8 +218,12 @@ function PendingRequestCard({
         adminLabel,
         isSick && !hasHospitalCert,
         request.halfDay
-          ? { date: request.halfDay.date, session: halfSession }
+          ? {
+              date: request.halfDay.date,
+              session: halfSessions[request.halfDay.date] || request.halfDay.session,
+            }
           : undefined,
+        Object.entries(halfSessions).map(([date, session]) => ({ date, session })),
       );
     } catch (err) {
       setErrorMsg(
@@ -260,9 +288,13 @@ function PendingRequestCard({
       <div className="px-5 py-4 space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
           <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
-            <div className="text-[11px] text-slate-500">Thời gian nghỉ</div>
+            <div className="text-[11px] text-slate-500">
+              Thời gian nghỉ {requestDates.length > 1 ? `(${requestDates.length} ngày)` : ''}
+            </div>
             <div className="font-mono-num text-slate-900 mt-0.5">
-              {formatDateVN(request.startDate)} → {formatDateVN(request.endDate)}
+              {requestDates.length > 0
+                ? requestDates.map((date) => formatDateVN(date)).join(', ')
+                : `${formatDateVN(request.startDate)} → ${formatDateVN(request.endDate)}`}
             </div>
           </div>
           <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
@@ -281,28 +313,36 @@ function PendingRequestCard({
           </div>
         </div>
 
-        {request.halfDay && (
+        {halfEntries.length > 0 && (
           <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-900 space-y-2">
             <div className="font-medium">
-              Nghỉ nửa ngày vào {formatDateVN(request.halfDay.date)} — tổng{' '}
+              Nghỉ nửa ngày vào{' '}
+              {halfEntries.map((item) => formatDateVN(item.date)).join(', ')} — tổng{' '}
               {request.workingDays} ngày
             </div>
-            <div className="flex flex-wrap gap-2">
-              {(['Sáng', 'Chiều'] as const).map((session) => (
-                <button
-                  key={session}
-                  type="button"
-                  onClick={() => setHalfSession(session)}
-                  className={`px-2.5 py-1 text-[11px] font-medium rounded-md border transition-colors ${
-                    halfSession === session
-                      ? 'bg-amber-700 text-white border-amber-700'
-                      : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100'
-                  }`}
-                >
-                  {getHalfDayTimeLabel(session)}
-                </button>
-              ))}
-            </div>
+            {halfEntries.map((item) => (
+              <div key={item.date} className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] text-amber-800 font-mono-num">
+                  {formatDateVN(item.date)}:
+                </span>
+                {(['Sáng', 'Chiều'] as const).map((session) => (
+                  <button
+                    key={`${item.date}-${session}`}
+                    type="button"
+                    onClick={() =>
+                      setHalfSessions((prev) => ({ ...prev, [item.date]: session }))
+                    }
+                    className={`px-2.5 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+                      halfSessions[item.date] === session
+                        ? 'bg-amber-700 text-white border-amber-700'
+                        : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100'
+                    }`}
+                  >
+                    {getHalfDayTimeLabel(session)}
+                  </button>
+                ))}
+              </div>
+            ))}
             <p className="text-[11px] text-amber-800">
               Điểm danh sẽ ghi nhận nhân sự làm việc buổi còn lại (08:15–12:15 / 13:30–17:30,
               nghỉ trưa 12:15–13:30).

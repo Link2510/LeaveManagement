@@ -19,6 +19,62 @@ export function getHalfDayTimeLabel(session: HalfDaySession): string {
 }
 
 /** Ngày làm việc đầu tiên của khoảng nghỉ — là ngày bị giảm còn nửa ngày. */
+export interface SelectedLeaveDay {
+  date: string;
+  days: number;
+  session: HalfDaySession | null;
+}
+
+/** Chuẩn hoá danh sách ngày rời rạc do nhân viên chọn (bỏ trùng, bỏ ngày không làm việc). */
+export function resolveSelectedLeaveDays(
+  dates: string[],
+  holidays: CompanyHoliday[],
+  halfSessionByDate: Record<string, HalfDaySession>,
+): SelectedLeaveDay[] {
+  const unique = Array.from(
+    new Set(dates.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))),
+  ).sort();
+  const result: SelectedLeaveDay[] = [];
+  for (const date of unique) {
+    if (!isWorkingDay(date, holidays)) continue;
+    const session = halfSessionByDate[date];
+    result.push({
+      date,
+      days: session === 'Sáng' || session === 'Chiều' ? 0.5 : 1,
+      session: session === 'Sáng' || session === 'Chiều' ? session : null,
+    });
+  }
+  return result;
+}
+
+/** Gộp `halfDay` (cũ) và `halfDays` (mới) thành một map date -> buổi nghỉ. */
+export function getRequestHalfDayMap(request: {
+  halfDay?: { date: string; session: HalfDaySession };
+  halfDays?: Array<{ date: string; session: HalfDaySession }>;
+}): Record<string, HalfDaySession> {
+  const map: Record<string, HalfDaySession> = {};
+  if (request.halfDay?.date && request.halfDay.session) {
+    map[request.halfDay.date] = request.halfDay.session;
+  }
+  for (const item of request.halfDays || []) {
+    if (item?.date && (item.session === 'Sáng' || item.session === 'Chiều')) {
+      map[item.date] = item.session;
+    }
+  }
+  return map;
+}
+
+/** Đơn có phủ ngày này không — ưu tiên `dates` nếu là đơn chọn rời rạc. */
+export function leaveRequestCoversDate(
+  request: { startDate: string; endDate: string; dates?: string[] },
+  dateKey: string,
+): boolean {
+  if (Array.isArray(request.dates) && request.dates.length > 0) {
+    return request.dates.includes(dateKey);
+  }
+  return isDateInRange(dateKey, request.startDate, request.endDate);
+}
+
 export function getFirstWorkingDate(
   startDate: string,
   endDate: string,

@@ -111,8 +111,10 @@ export function ApprovalHistory({
                       <div className="font-medium text-slate-900">{req.employeeName}</div>
                       <div className="text-xs text-slate-500">{req.department}</div>
                     </td>
-                    <td className="py-3.5 px-4 font-mono-num text-xs text-slate-700 whitespace-nowrap">
-                      {formatDateVN(req.startDate)} → {formatDateVN(req.endDate)}
+                    <td className="py-3.5 px-4 font-mono-num text-xs text-slate-700">
+                      {Array.isArray(req.dates) && req.dates.length > 0
+                        ? req.dates.map((date) => formatDateVN(date)).join(', ')
+                        : `${formatDateVN(req.startDate)} → ${formatDateVN(req.endDate)}`}
                     </td>
                     <td className="py-3.5 px-4 text-right font-mono-num tabular-nums font-medium text-slate-900">
                       {req.workingDays}
