@@ -213,7 +213,7 @@
 
 - Theo góp ý "chọn ngày không thể để chung 1 ô được sao": `VietnameseDatePicker.tsx` đổi trigger từ nút sang **input text + nút biểu tượng lịch** trong cùng một khung. Gõ `dd/mm/yyyy`/`yyyy-mm-dd` sẽ gọi `onChange` ngay khi hợp lệ; blur chuẩn hoá lại chữ, bấm icon lịch mở popover như cũ. Component dùng chung nên form Quản lý cũng có thêm khả năng gõ ngày.
 - `EmployeeLeaveRequestForm.tsx`: bỏ ô input riêng, chỉ còn một `VietnameseDatePicker` nhãn **"Chọn hoặc nhập ngày nghỉ"**; bỏ state `dateText`, `handleDateTextChange`, import `parseFlexibleDateInput`. Sau khi thêm ngày / reset form, ô này về rỗng.
-- Cập nhật README. `npm run lint` + `npm run build` đạt; không đổi rules.
+- Đính chính thêm: ô ngày phải **luôn hiển thị một ngày** (mặc định hôm nay) chứ không được để trống. `draftDate` khởi tạo/reset về `getTodayKey()`, `pickedDays` vẫn rỗng; sau khi bấm "Thêm ngày" giữ nguyên ngày vừa thêm trong ô (không xoá), nhờ đó vừa thấy ngày dạng pick date vừa gõ tiếp được từ bàn phím. Cập nhật README. `npm run lint` + `npm run build` đạt; không đổi rules.
 
 ### 2.20 Giấy xác nhận y tế gọn còn một tick
 

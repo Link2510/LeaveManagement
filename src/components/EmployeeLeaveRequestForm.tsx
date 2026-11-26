@@ -16,6 +16,7 @@ import { submitEmployeeLeaveRequest } from '../services/firestoreService';
 import {
   formatDateVN,
   getHalfDayTimeLabel,
+  getTodayKey,
   getWeekdayLabelVN,
   isWorkingDay,
   resolveSelectedLeaveDays,
@@ -43,8 +44,10 @@ export function EmployeeLeaveRequestForm({
   employees,
   holidays,
 }: EmployeeLeaveRequestFormProps) {
+  const today = getTodayKey();
   const [employeeId, setEmployeeId] = useState('');
-  const [draftDate, setDraftDate] = useState('');
+  // Ô chọn ngày luôn hiển thị một ngày (mặc định hôm nay), nhưng chưa được thêm vào đơn.
+  const [draftDate, setDraftDate] = useState(today);
   const [pickedDays, setPickedDays] = useState<PickedDay[]>([]);
   const [pickerError, setPickerError] = useState('');
   const [reason, setReason] = useState('');
@@ -116,7 +119,7 @@ export function EmployeeLeaveRequestForm({
         a.date.localeCompare(b.date),
       ),
     );
-    setDraftDate('');
+    // Giữ ngày đã thêm hiển thị trong ô, để tiếp tục gõ/chọn ngày khác.
   };
 
   const removeDate = (date: string) => {
@@ -134,7 +137,7 @@ export function EmployeeLeaveRequestForm({
   const resetForm = () => {
     setReason('');
     setNote('');
-    setDraftDate('');
+    setDraftDate(today);
     setPickedDays([]);
     setPickerError('');
   };
@@ -328,8 +331,10 @@ export function EmployeeLeaveRequestForm({
             </div>
 
             <p className="text-[11px] text-slate-500">
-              Gõ trực tiếp <strong>dd/mm/yyyy</strong> hoặc <strong>yyyy-mm-dd</strong>,
-              hoặc bấm biểu tượng lịch để chọn.
+              Ô ngày luôn hiển thị một giá trị (mặc định là hôm nay) và gõ được trực
+              tiếp <strong>dd/mm/yyyy</strong> / <strong>yyyy-mm-dd</strong>, hoặc bấm
+              biểu tượng lịch để chọn. Bấm <strong>Thêm ngày</strong> mới đưa ngày đó
+              vào đơn.
             </p>
 
             {pickerError && (
