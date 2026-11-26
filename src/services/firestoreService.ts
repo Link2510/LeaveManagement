@@ -1038,12 +1038,23 @@ export async function rejectLeaveRequest(
   }
 }
 
-/** Super Admin xoá vĩnh viễn một đơn (dùng để dọn đơn test). Chỉ rules super admin cho phép. */
+/**
+ * Super Admin xoá vĩnh viễn một đơn (dùng để dọn đơn test).
+ * Xoá luôn các thông báo liên quan trong cùng batch để không còn "rác" ở mục Thông báo.
+ */
 export async function deleteLeaveRequest(requestId: string): Promise<void> {
   const cleanId = clampString(requestId, 128);
   if (!cleanId) throw new Error('Mã đơn không hợp lệ.');
   try {
-    await deleteDoc(doc(db, 'leaveRequests', cleanId));
+    const relatedNotifications = await getDocs(
+      query(collection(db, 'notifications'), where('requestId', '==', cleanId)),
+    );
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'leaveRequests', cleanId));
+    for (const item of relatedNotifications.docs.slice(0, 400)) {
+      batch.delete(doc(db, 'notifications', item.id));
+    }
+    await batch.commit();
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `leaveRequests/${cleanId}`);
   }
