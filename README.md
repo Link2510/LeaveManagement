@@ -75,7 +75,7 @@ Rules hiện tại cho phép:
 
 - Nhân viên (kể cả ẩn danh) **chỉ được tạo** đơn `Đang chờ duyệt` với `submitterUid` = uid của chính họ, không được tự ghi `processedBy` / `processedAt` / `rejectionReason`.
 - Nhân viên chỉ `get` được đơn do chính uid của họ gửi (không `list` toàn bộ).
-- Quản lý giữ toàn quyền đọc/ghi như trước.
+- Quản lý được đọc/sửa/duyệt đơn; **chỉ Super Admin** (`mynamelink1998@gmail.com`) mới được **xoá vĩnh viễn** đơn (`allow delete: if isSuperAdmin()`) để dọn đơn test. Nút "Xoá đơn" chỉ hiện trong giao diện Super Admin, có hộp xác nhận trước khi xoá.
 - `/leaveSummaries` cho phép mọi người đọc **chỉ số ngày còn lại** (không có lý do, email hay thông tin liên hệ).
 
 ### 3.3 Deploy Hosting

@@ -459,7 +459,8 @@ service cloud.firestore {
           'hospitalCertPending', 'rejectionReason', 'processedBy', 'processedAt',
           'emailHash', 'nameHash', 'updatedAt'
         ]);
-      allow delete: if false;
+      // Chỉ Super Admin được xoá vĩnh viễn (dọn đơn test); Quản lý thường không.
+      allow delete: if isSuperAdmin();
     }
 
     // 6. Isolated PII Contacts (email nhận thông báo; chỉ Quản lý đọc)

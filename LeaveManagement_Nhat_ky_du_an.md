@@ -220,6 +220,13 @@
 - `notificationSound.ts`: đổi từ 2 nốt sine (đỉnh gain 0,12, ngân 0,18s) thành **3 nốt tăng dần** 880 → 1174,66 → 1567,98 Hz, sóng `triangle`, đỉnh gain 0,32 qua master gain 0,85, mỗi nốt ngân 0,26s, cách nhau 0,17s — to và dễ nghe hơn khi đang làm việc app khác, vẫn không vượt ngưỡng clip.
 - Cập nhật README mục thông báo; `npm run lint` + `npm run build` đạt; không đổi rules.
 
+### 2.30 Super Admin xoá vĩnh viễn đơn (dọn đơn test)
+
+- `firestore.rules`: `leaveRequests.allow delete` đổi từ `false` thành `isSuperAdmin()` — chỉ email `mynamelink1998@gmail.com` (đã xác thực) xoá được; Quản lý thường vẫn không.
+- `firestoreService.ts`: thêm `deleteLeaveRequest(requestId)` gọi `deleteDoc(doc(db,'leaveRequests',id))` và `handleFirestoreError(..., DELETE, ...)`.
+- UI: `isSuperAdmin` được truyền từ `App.tsx` xuống `LeaveApprovalQueue` (nút **"Xoá đơn (test)"** trên thẻ đơn chờ) và `ApprovalHistory` (cột **Thao tác**, nút **"Xoá đơn"** cho đơn đã duyệt/từ chối). Mỗi nút có `window.confirm` nêu rõ "XOÁ VĨNH VIỄN ... không thể hoàn tác", trạng thái busy riêng và hiển thị lỗi inline.
+- Cập nhật README + `security_spec.md`. Cần deploy rules (GitHub Actions tự làm, hoặc `firebase deploy --only firestore:rules`).
+
 ### 2.20 Giấy xác nhận y tế gọn còn một tick
 
 - Form nhân viên (`EmployeeLeaveRequestForm.tsx`) bỏ hoàn toàn ô **liên kết Google Drive** và kiểm tra `validateGoogleDriveUrl`; chỉ giữ checkbox **"Tôi đã có giấy xác nhận của bệnh viện / cơ sở y tế"**. Submit không còn ghi `attachmentUrl`.

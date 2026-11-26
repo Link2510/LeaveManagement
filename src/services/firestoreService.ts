@@ -1038,6 +1038,17 @@ export async function rejectLeaveRequest(
   }
 }
 
+/** Super Admin xoá vĩnh viễn một đơn (dùng để dọn đơn test). Chỉ rules super admin cho phép. */
+export async function deleteLeaveRequest(requestId: string): Promise<void> {
+  const cleanId = clampString(requestId, 128);
+  if (!cleanId) throw new Error('Mã đơn không hợp lệ.');
+  try {
+    await deleteDoc(doc(db, 'leaveRequests', cleanId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `leaveRequests/${cleanId}`);
+  }
+}
+
 export function subscribeNotifications(
   isManager: boolean,
   onData: (notifications: AppNotification[]) => void,

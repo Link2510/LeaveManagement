@@ -8,6 +8,7 @@ import {
   Inbox,
   Search,
   Stethoscope,
+  Trash2,
   X,
 } from 'lucide-react';
 import type {
@@ -19,6 +20,7 @@ import type {
 import { ALL_LEAVE_TYPES } from '../types/leave';
 import {
   approveLeaveRequest,
+  deleteLeaveRequest,
   rejectLeaveRequest,
 } from '../services/firestoreService';
 import {
@@ -31,6 +33,7 @@ import { StatusLabel } from './StatusBadge';
 interface LeaveApprovalQueueProps {
   requests: LeaveRequestItem[];
   adminLabel?: string;
+  isSuperAdmin?: boolean;
 }
 
 function emptyAllocations(): Record<LeaveType, number> {
@@ -75,6 +78,7 @@ function initialAllocations(request: LeaveRequestItem): Record<LeaveType, number
 export function LeaveApprovalQueue({
   requests,
   adminLabel = 'Quản lý',
+  isSuperAdmin = false,
 }: LeaveApprovalQueueProps) {
   const [keyword, setKeyword] = useState('');
 
@@ -144,6 +148,7 @@ export function LeaveApprovalQueue({
               key={request.id}
               request={request}
               adminLabel={adminLabel}
+              isSuperAdmin={isSuperAdmin}
             />
           ))}
         </div>
@@ -155,9 +160,11 @@ export function LeaveApprovalQueue({
 function PendingRequestCard({
   request,
   adminLabel,
+  isSuperAdmin,
 }: {
   request: LeaveRequestItem;
   adminLabel: string;
+  isSuperAdmin: boolean;
 }) {
   const [allocMap, setAllocMap] = useState<Record<LeaveType, number>>(() =>
     initialAllocations(request),
@@ -170,7 +177,7 @@ function PendingRequestCard({
   const [halfSessions, setHalfSessions] = useState<Record<string, HalfDaySession>>(
     () => initialHalfSessions(request),
   );
-  const [busy, setBusy] = useState<'approve' | 'reject' | null>(null);
+  const [busy, setBusy] = useState<'approve' | 'reject' | 'delete' | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
   const halfEntries =
@@ -221,6 +228,25 @@ function PendingRequestCard({
     } catch (err) {
       setErrorMsg(
         err instanceof Error ? err.message : 'Không thể duyệt đơn. Vui lòng thử lại.',
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!isSuperAdmin) return;
+    const ok = window.confirm(
+      `XOÁ VĨNH VIỄN đơn ${request.id} của ${request.employeeName} khỏi Firestore? Hành động này không thể hoàn tác.`,
+    );
+    if (!ok) return;
+    setErrorMsg('');
+    setBusy('delete');
+    try {
+      await deleteLeaveRequest(request.id);
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Không thể xoá đơn. Vui lòng thử lại.',
       );
     } finally {
       setBusy(null);
@@ -471,6 +497,17 @@ function PendingRequestCard({
               </>
             ) : (
               <>
+                {isSuperAdmin && (
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => void handleDelete()}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-700 bg-white border border-red-200 hover:bg-red-50 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap mr-auto"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {busy === 'delete' ? 'Đang xoá...' : 'Xoá đơn (test)'}
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled={busy !== null}

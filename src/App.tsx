@@ -1302,6 +1302,7 @@ useEffect(() => {
                   <LeaveApprovalQueue
                     requests={requests}
                     adminLabel={currentManagerName}
+                    isSuperAdmin={isSuperAdmin}
                   />
                 )}
 
@@ -1352,6 +1353,7 @@ useEffect(() => {
                     requests={requests}
                     managers={managers}
                     adminLabel={currentManagerName}
+                    isSuperAdmin={isSuperAdmin}
                   />
                 )}
 

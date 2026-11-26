@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Check, History } from 'lucide-react';
+import { Check, History, Trash2 } from 'lucide-react';
 import type { LeaveRequestItem, ManagerAccount } from '../types/leave';
-import { markHospitalCertReceived } from '../services/firestoreService';
+import { deleteLeaveRequest, markHospitalCertReceived } from '../services/firestoreService';
 import { formatDateTimeVN, formatDateVN } from '../utils/dateUtils';
 import { resolveManagerName } from '../utils/managerUtils';
 import { StatusLabel } from './StatusBadge';
@@ -10,17 +10,20 @@ interface ApprovalHistoryProps {
   requests: LeaveRequestItem[];
   managers?: ManagerAccount[];
   adminLabel?: string;
+  isSuperAdmin?: boolean;
 }
 
 export function ApprovalHistory({
   requests,
   managers = [],
   adminLabel = 'Quản lý',
+  isSuperAdmin = false,
 }: ApprovalHistoryProps) {
   const [filter, setFilter] = useState<
     'Tất cả' | 'Đã duyệt' | 'Chờ bổ sung giấy ốm' | 'Từ chối'
   >('Tất cả');
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
 
   const processedList = useMemo(() => {
@@ -34,6 +37,25 @@ export function ApprovalHistory({
       return r.status === filter;
     });
   }, [requests, filter]);
+
+  const handleDelete = async (req: LeaveRequestItem) => {
+    if (deletingId) return;
+    const ok = window.confirm(
+      `XOÁ VĨNH VIỄN đơn ${req.id} của ${req.employeeName} khỏi Firestore? Hành động này không thể hoàn tác.`,
+    );
+    if (!ok) return;
+    setActionError('');
+    setDeletingId(req.id);
+    try {
+      await deleteLeaveRequest(req.id);
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : 'Không thể xoá đơn. Vui lòng thử lại.',
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const handleConfirmCert = async (req: LeaveRequestItem) => {
     if (confirmingId) return;
@@ -94,12 +116,15 @@ export function ApprovalHistory({
               <th className="py-3 px-4">Trạng thái</th>
               <th className="py-3 px-4">Phân bổ &amp; giấy xác nhận</th>
               <th className="py-3 px-6 whitespace-nowrap">Người &amp; thời điểm ghi nhận</th>
+              {isSuperAdmin && (
+                <th className="py-3 px-4 whitespace-nowrap text-right">Thao tác</th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-sm">
             {processedList.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-12 text-center text-slate-500">
+                <td colSpan={isSuperAdmin ? 7 : 6} className="py-12 text-center text-slate-500">
                   Chưa có dữ liệu nghỉ phép phù hợp trong mục này.
                 </td>
               </tr>
@@ -160,6 +185,20 @@ export function ApprovalHistory({
                         {formatDateTimeVN(req.processedAt)}
                       </div>
                     </td>
+                    {isSuperAdmin && (
+                      <td className="py-3.5 px-4 text-right">
+                        <button
+                          type="button"
+                          disabled={deletingId !== null}
+                          onClick={() => void handleDelete(req)}
+                          title="Xoá vĩnh viễn đơn này khỏi Firestore"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-white border border-red-200 hover:bg-red-50 disabled:opacity-50 rounded-lg whitespace-nowrap"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          {deletingId === req.id ? 'Đang xoá...' : 'Xoá đơn'}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })
