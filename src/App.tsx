@@ -17,6 +17,7 @@ import {
   FilePlus2,
   History,
   Inbox,
+  KeyRound,
   LayoutDashboard,
   LogIn,
   LogOut,
@@ -72,6 +73,7 @@ import { LeaveRequestForm } from './components/LeaveRequestForm';
 import { EmployeeManager } from './components/EmployeeManager';
 import { HolidayManager } from './components/HolidayManager';
 import { ApprovalHistory } from './components/ApprovalHistory';
+import { AccountSettings } from './components/AccountSettings';
 import { AttendanceToday } from './components/AttendanceToday';
 import { EmployeeLeaveRequestForm } from './components/EmployeeLeaveRequestForm';
 import { LeaveApprovalQueue } from './components/LeaveApprovalQueue';
@@ -100,7 +102,8 @@ type NavTab =
   | 'dashboard'
   | 'calendar'
   | 'employees'
-  | 'history';
+  | 'history'
+  | 'account';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -703,6 +706,12 @@ useEffect(() => {
       },
       { id: 'employees', label: 'Quản lý nhân sự', icon: Users, managerOnly: true },
       { id: 'history', label: 'Lịch sử nghỉ phép', icon: History, managerOnly: true },
+      {
+        id: 'account',
+        label: 'Tài khoản & mật khẩu',
+        icon: KeyRound,
+        managerOnly: true,
+      },
       { id: 'holidays', label: 'Ngày nghỉ công ty', icon: CalendarOff },
     ];
 
@@ -722,6 +731,7 @@ useEffect(() => {
     'new-request': 'Đăng ký & phân bổ ngày nghỉ cho nhân viên',
     employees: 'Quản lý nhân sự & tài khoản Quản lý',
     history: 'Lịch sử đăng ký & phân bổ nghỉ phép',
+    account: 'Tài khoản & mật khẩu Quản lý',
     holidays: 'Ngày nghỉ lễ & lịch OT công ty',
   };
 
@@ -1355,6 +1365,10 @@ useEffect(() => {
                     adminLabel={currentManagerName}
                     isSuperAdmin={isSuperAdmin}
                   />
+                )}
+
+                {activeTab === 'account' && isManagerView && user && (
+                  <AccountSettings user={user} />
                 )}
 
                 {activeTab === 'holidays' && (

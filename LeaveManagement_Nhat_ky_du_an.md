@@ -227,6 +227,12 @@
 - UI: `isSuperAdmin` được truyền từ `App.tsx` xuống `LeaveApprovalQueue` (nút **"Xoá đơn (test)"** trên thẻ đơn chờ) và `ApprovalHistory` (nút **"Xoá đơn"** cho đơn đã duyệt/từ chối, đặt ngay dưới tên nhân sự ở cột đầu để không phải cuộn ngang). Mỗi nút có `window.confirm` nêu rõ "XOÁ VĨNH VIỄN ... không thể hoàn tác", trạng thái busy riêng và hiển thị lỗi inline.
 - Cập nhật README + `security_spec.md`. Cần deploy rules (GitHub Actions tự làm, hoặc `firebase deploy --only firestore:rules`).
 
+### 2.31 Tab đổi mật khẩu cho tài khoản Quản lý
+
+- Thêm `NavTab: 'account'`, item sidebar **"Tài khoản & mật khẩu"** (`managerOnly`, icon `KeyRound`), tiêu đề trang và block render trong `App.tsx`.
+- Component mới `src/components/AccountSettings.tsx`: hiện tên đăng nhập + phương thức đăng nhập; form nhập **mật khẩu hiện tại / mới (≥ 8 ký tự) / xác nhận**, kiểm tra khớp và khác mật khẩu cũ. Gọi `reauthenticateWithCredential(user, EmailAuthProvider.credential(email, currentPassword))` rồi `updatePassword(user, newPassword)`. Xử lý các lỗi `wrong-password`, `weak-password`, `requires-recent-login` bằng tiếng Việt; clear form + thông báo thành công.
+- Tài khoản đăng nhập Google (`providerData` không có `password`) bị disable nút và hiển thị hướng dẫn quản lý tại Google. Không lưu mật khẩu vào Firestore; không đổi rules.
+
 ### 2.20 Giấy xác nhận y tế gọn còn một tick
 
 - Form nhân viên (`EmployeeLeaveRequestForm.tsx`) bỏ hoàn toàn ô **liên kết Google Drive** và kiểm tra `validateGoogleDriveUrl`; chỉ giữ checkbox **"Tôi đã có giấy xác nhận của bệnh viện / cơ sở y tế"**. Submit không còn ghi `attachmentUrl`.
