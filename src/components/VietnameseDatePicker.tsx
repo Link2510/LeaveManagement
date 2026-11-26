@@ -7,7 +7,7 @@ import {
   getHolidayCategoryLabel,
   getMonthCalendarCells,
   getTodayKey,
-  getWeekdayLabelVN,
+  parseFlexibleDateInput,
   parseDateKey,
 } from '../utils/dateUtils';
 
@@ -46,6 +46,27 @@ export function VietnameseDatePicker({
 }: VietnameseDatePickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [text, setText] = useState(value ? formatDateVN(value) : '');
+
+  useEffect(() => {
+    setText(value ? formatDateVN(value) : '');
+  }, [value]);
+
+  const handleTextChange = (raw: string) => {
+    setText(raw);
+    if (raw.trim() === '') {
+      onChange('');
+      return;
+    }
+    const parsed = parseFlexibleDateInput(raw);
+    if (parsed && (!min || parsed >= min)) onChange(parsed);
+  };
+
+  const handleTextBlur = () => {
+    const parsed = parseFlexibleDateInput(text);
+    if (parsed) setText(formatDateVN(parsed));
+    else setText(value ? formatDateVN(value) : '');
+  };
 
   const initialDate = useMemo(() => {
     const parsed = value ? parseDateKey(value) : new Date();
@@ -138,25 +159,30 @@ export function VietnameseDatePicker({
       <label htmlFor={id} className="block text-xs font-medium text-slate-700 mb-1.5">
         {label}
       </label>
-      <button
-        id={id}
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        aria-expanded={open}
-        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 flex items-center justify-between gap-2 text-left transition-colors"
-      >
-        <span className="truncate text-slate-900">
-          {value ? (
-            <>
-              <span className="font-medium">{getWeekdayLabelVN(value)}, </span>
-              <span className="font-mono-num tabular-nums">{formatDateVN(value)}</span>
-            </>
-          ) : (
-            <span className="text-slate-400">Chọn ngày...</span>
-          )}
-        </span>
-        <CalendarDays className="w-4 h-4 text-slate-400 shrink-0" />
-      </button>
+      <div className="w-full flex items-center border border-slate-200 rounded-lg bg-white hover:border-slate-300 focus-within:ring-2 focus-within:ring-teal-600/20 focus-within:border-teal-600 transition-colors">
+        <input
+          id={id}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          value={text}
+          onChange={(e) => handleTextChange(e.target.value)}
+          onFocus={() => setOpen(true)}
+          onBlur={handleTextBlur}
+          aria-expanded={open}
+          placeholder="dd/mm/yyyy — Chọn ngày..."
+          className="min-w-0 flex-1 px-3 py-2 text-sm bg-transparent text-slate-900 placeholder:text-slate-400 focus:outline-none font-mono-num tabular-nums"
+        />
+        <button
+          type="button"
+          aria-label="Mở lịch chọn ngày"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setOpen((prev) => !prev)}
+          className="p-2 mr-0.5 rounded-md text-slate-400 hover:text-teal-700 hover:bg-slate-50 shrink-0"
+        >
+          <CalendarDays className="w-4 h-4" />
+        </button>
+      </div>
 
       <AnimatePresence>
         {open && (

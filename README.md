@@ -16,7 +16,7 @@
 
 | Mục | Mô tả |
 |---|---|
-| **Đăng ký nghỉ phép** | Chọn họ tên, sau đó **chọn từng ngày nghỉ một** (có thể rời rạc, không cần liên tiếp), tối đa 31 ngày/đơn. Có thể **gõ ngày trực tiếp từ bàn phím** (`dd/mm/yyyy` hoặc `yyyy-mm-dd`) hoặc dùng lịch; form mở ra **không tự chọn sẵn ngày hôm nay**. Ngày cuối tuần/nghỉ công ty bị loại; mỗi ngày chọn **Cả ngày / Sáng 08:15–12:15 / Chiều 13:30–17:30**. Nhập lý do/ghi chú. Không chọn loại phép — quản lý phân bổ khi duyệt. Form nhân viên **không hỏi giấy xác nhận y tế**. |
+| **Đăng ký nghỉ phép** | Chọn họ tên, sau đó **chọn từng ngày nghỉ một** (có thể rời rạc, không cần liên tiếp), tối đa 31 ngày/đơn. Dùng **một ô duy nhất** vừa gõ được ngày từ bàn phím (`dd/mm/yyyy` hoặc `yyyy-mm-dd`) vừa bấm biểu tượng lịch để chọn; form mở ra **không tự chọn sẵn ngày hôm nay**. Ngày cuối tuần/nghỉ công ty bị loại; mỗi ngày chọn **Cả ngày / Sáng 08:15–12:15 / Chiều 13:30–17:30**. Nhập lý do/ghi chú. Không chọn loại phép — quản lý phân bổ khi duyệt. Form nhân viên **không hỏi giấy xác nhận y tế**. |
 | **Hôm nay ai đi làm** | Xem đồng nghiệp đang làm việc / nghỉ phép trong ngày. Người nghỉ nửa buổi vẫn hiện trong danh sách với nhãn buổi nghỉ. **Bấm vào thẻ một người** để xem số ngày phép năm và nghỉ việc riêng còn lại của người đó. |
 | **Ngày nghỉ công ty** | Xem lịch lễ, nghỉ bù, OT của công ty. |
 
