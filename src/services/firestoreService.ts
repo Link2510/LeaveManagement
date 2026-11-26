@@ -41,7 +41,6 @@ import {
   type HalfDaySession,
   type HolidayCategory,
   type LeaveAllocation,
-  type LeaveRequestContact,
   type LeaveRequestItem,
   type LeaveSummary,
   type ManagerAccount,
@@ -669,35 +668,6 @@ export function subscribeLeaveRequests(
       if (added.length > 0) {
         onAdded(added, items);
       }
-    },
-    (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
-    },
-  );
-}
-
-export function subscribeLeaveContacts(
-  isManager: boolean,
-  onData: (contacts: Record<string, LeaveRequestContact>) => void,
-): Unsubscribe {
-  if (!isManager) {
-    onData({});
-    return () => {};
-  }
-  const path = 'leaveRequestContacts';
-  return onSnapshot(
-    collection(db, path),
-    (snapshot) => {
-      const map: Record<string, LeaveRequestContact> = {};
-      for (const d of snapshot.docs) {
-        const data = d.data();
-        map[d.id] = {
-          requestId: String(data.requestId || d.id),
-          email: String(data.email || ''),
-          submitterUid: String(data.submitterUid || ''),
-        };
-      }
-      onData(map);
     },
     (error) => {
       handleFirestoreError(error, OperationType.LIST, path);

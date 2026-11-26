@@ -6,7 +6,6 @@ import {
   ClipboardCheck,
   Clock,
   Inbox,
-  Mail,
   Search,
   Stethoscope,
   X,
@@ -14,7 +13,6 @@ import {
 import type {
   HalfDaySession,
   LeaveAllocation,
-  LeaveRequestContact,
   LeaveRequestItem,
   LeaveType,
 } from '../types/leave';
@@ -32,7 +30,6 @@ import { StatusLabel } from './StatusBadge';
 
 interface LeaveApprovalQueueProps {
   requests: LeaveRequestItem[];
-  contacts?: Record<string, LeaveRequestContact>;
   adminLabel?: string;
 }
 
@@ -77,7 +74,6 @@ function initialAllocations(request: LeaveRequestItem): Record<LeaveType, number
 
 export function LeaveApprovalQueue({
   requests,
-  contacts = {},
   adminLabel = 'Quản lý',
 }: LeaveApprovalQueueProps) {
   const [keyword, setKeyword] = useState('');
@@ -147,7 +143,6 @@ export function LeaveApprovalQueue({
             <PendingRequestCard
               key={request.id}
               request={request}
-              contactEmail={contacts[request.id]?.email || ''}
               adminLabel={adminLabel}
             />
           ))}
@@ -159,11 +154,9 @@ export function LeaveApprovalQueue({
 
 function PendingRequestCard({
   request,
-  contactEmail,
   adminLabel,
 }: {
   request: LeaveRequestItem;
-  contactEmail: string;
   adminLabel: string;
 }) {
   const [allocMap, setAllocMap] = useState<Record<LeaveType, number>>(() =>
@@ -286,7 +279,7 @@ function PendingRequestCard({
       </div>
 
       <div className="px-5 py-4 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
             <div className="text-[11px] text-slate-500">
               Thời gian nghỉ {requestDates.length > 1 ? `(${requestDates.length} ngày)` : ''}
@@ -301,14 +294,6 @@ function PendingRequestCard({
             <div className="text-[11px] text-slate-500">Số ngày làm việc</div>
             <div className="font-mono-num text-slate-900 mt-0.5">
               {request.workingDays} ngày
-            </div>
-          </div>
-          <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 min-w-0">
-            <div className="text-[11px] text-slate-500 flex items-center gap-1">
-              <Mail className="w-3 h-3" /> Liên hệ
-            </div>
-            <div className="text-slate-900 mt-0.5 truncate">
-              {contactEmail || 'Không thu thập email'}
             </div>
           </div>
         </div>

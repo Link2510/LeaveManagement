@@ -131,12 +131,6 @@ export interface LeaveSummary {
   updatedAtMs: number;
 }
 
-export interface LeaveRequestContact {
-  requestId: string;
-  email: string;
-  submitterUid: string;
-}
-
 export interface AppNotification {
   id: string;
   recipientType: 'admin' | 'employee';

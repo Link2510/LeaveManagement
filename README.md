@@ -97,7 +97,7 @@ firebase deploy --only hosting
 | `/companyHolidays/{id}` | Lễ, nghỉ bù, OT | Công khai | Quản lý |
 | `/leaveRequests/{id}` | Đơn nghỉ phép đầy đủ | Quản lý; nhân viên chỉ đọc đơn của mình | Quản lý; nhân viên chỉ tạo đơn chờ duyệt của mình |
 | `/leaveSummaries/{employeeId}` | Số ngày phép năm / nghỉ việc riêng còn lại (chỉ số, không PII) | Công khai | Quản lý (tự đồng bộ) |
-| `/leaveRequestContacts/{id}` | Email liên hệ của **đơn cũ** (không còn ghi mới) | Quản lý | Người gửi đơn (tạo) / Quản lý |
+| `/leaveRequestContacts/{id}` | Email liên hệ của **đơn cũ** — rules giữ để tương thích, app không còn ghi/đọc/hiển thị | Quản lý (theo rules) | Không còn dùng |
 | `/notifications/{id}` | Thông báo trong app (chuông + toast) | Quản lý | Quản lý; nhân viên chỉ tạo thông báo "đơn mới" cho Quản lý |
 | `/dailyOffStatus`, `/monthlyOffStatus` | Chỉ số nghỉ phép không PII cho lịch/điểm danh; `dailyOffStatus.halfDayOff` chứa buổi nghỉ nửa ngày | Công khai theo ngày/tháng | Quản lý |
 
@@ -134,7 +134,7 @@ firebase deploy --only hosting
 
 **Ai đọc được?**
 
-- Quản lý đọc được đơn đầy đủ + email liên hệ của đơn cũ (nếu có).
+- Quản lý đọc được đơn đầy đủ; giao diện **không còn mục "Liên hệ"** và app không đọc collection email liên hệ cũ.
 - Nhân viên chỉ đọc được đơn của chính uid ẩn danh đã tạo.
 - Mọi người đọc được `/leaveSummaries`: **chỉ** mã nhân sự, năm và số ngày đã dùng / còn lại. Không có lý do nghỉ, email hay thông tin liên hệ.
 - `dailyOffStatus` / `monthlyOffStatus` chỉ chứa ID nhân sự + ngày nghỉ, không có lý do.

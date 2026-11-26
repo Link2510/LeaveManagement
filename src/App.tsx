@@ -38,7 +38,6 @@ import {
   subscribeEmployees,
   subscribeHolidays,
   subscribeIsManager,
-  subscribeLeaveContacts,
   subscribeLeaveRequests,
   subscribeLeaveSummaries,
   subscribeManagers,
@@ -56,7 +55,6 @@ import {
   type EmployeeQuota,
   type EmployeeStats,
   type HalfDayOffEntry,
-  type LeaveRequestContact,
   type LeaveRequestItem,
   type LeaveSummary,
   type ManagerAccount,
@@ -135,7 +133,6 @@ export default function App() {
   const [managers, setManagers] = useState<ManagerAccount[]>([]);
   const [holidays, setHolidays] = useState<CompanyHoliday[]>([]);
   const [requests, setRequests] = useState<LeaveRequestItem[]>([]);
-  const [contacts, setContacts] = useState<Record<string, LeaveRequestContact>>({});
   const [leaveSummaries, setLeaveSummaries] = useState<Record<string, LeaveSummary>>({});
   const [dailyOffEmployeeIds, setDailyOffEmployeeIds] = useState<string[]>([]);
   const [halfDayOff, setHalfDayOff] = useState<HalfDayOffEntry[]>([]);
@@ -290,9 +287,6 @@ useEffect(() => {
         if (active) setNotifications(list);
       },
     );
-    const unsubContacts = subscribeLeaveContacts(canReadManagerFirestore, (map) => {
-      if (active) setContacts(map);
-    });
     const unsubManagers = subscribeManagers(canReadManagerFirestore, (list) => {
       if (active) setManagers(list);
     });
@@ -316,7 +310,6 @@ useEffect(() => {
       unsubDailyOff();
       unsubRequests();
       unsubNotifs();
-      unsubContacts();
       unsubManagers();
       unsubSummaries();
       unsubQuotas?.();
@@ -1309,7 +1302,6 @@ useEffect(() => {
                 {isManagerView && activeTab === 'approvals' && (
                   <LeaveApprovalQueue
                     requests={requests}
-                    contacts={contacts}
                     adminLabel={currentManagerName}
                   />
                 )}

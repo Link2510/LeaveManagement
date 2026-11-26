@@ -197,6 +197,12 @@
 - UI panel chuông: dòng mới **"Thông báo trên màn hình"** với các trạng thái **Bật thông báo / Đang bật / Đã chặn / Không hỗ trợ**; khi bị chặn hướng dẫn mở lại quyền ở biểu tượng khoá thanh địa chỉ. Cấp quyền xong hiển thị một thông báo thử.
 - Giới hạn ghi rõ trong README: chỉ khi trình duyệt còn mở (tab ẩn vẫn được), không push khi tắt hẳn trình duyệt; không đổi rules.
 
+### 2.26 Bỏ mục "Liên hệ" email trong hàng đợi duyệt
+
+- `LeaveApprovalQueue.tsx`: xoá ô **Liên hệ / "Không thu thập email"** khỏi mỗi thẻ đơn chờ; lưới thông tin chuyển từ 3 cột sang 2 cột (Thời gian nghỉ, Số ngày làm việc). Bỏ prop `contacts` / `contactEmail` và icon `Mail`.
+- `App.tsx`: bỏ state `contacts`, subscription `subscribeLeaveContacts`, lời gọi unsub và prop `contacts={contacts}`. `firestoreService.ts`: xoá hàm `subscribeLeaveContacts` và import type tương ứng. `types/leave.ts`: xoá interface `LeaveRequestContact` (không còn nơi dùng).
+- Giữ nguyên khối `/leaveRequestContacts` trong `firestore.rules` chỉ để tương thích dữ liệu cũ; app không ghi/đọc. Cập nhật README bảng collection + mục quyền riêng tư. Không cần deploy rules.
+
 ### 2.20 Giấy xác nhận y tế gọn còn một tick
 
 - Form nhân viên (`EmployeeLeaveRequestForm.tsx`) bỏ hoàn toàn ô **liên kết Google Drive** và kiểm tra `validateGoogleDriveUrl`; chỉ giữ checkbox **"Tôi đã có giấy xác nhận của bệnh viện / cơ sở y tế"**. Submit không còn ghi `attachmentUrl`.
