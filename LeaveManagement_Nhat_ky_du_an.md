@@ -215,6 +215,11 @@
 - `EmployeeLeaveRequestForm.tsx`: bỏ ô input riêng, chỉ còn một `VietnameseDatePicker` nhãn **"Chọn hoặc nhập ngày nghỉ"**; bỏ state `dateText`, `handleDateTextChange`, import `parseFlexibleDateInput`. Sau khi thêm ngày / reset form, ô này về rỗng.
 - Đính chính thêm: ô ngày phải **luôn hiển thị một ngày** (mặc định hôm nay) chứ không được để trống. `draftDate` khởi tạo/reset về `getTodayKey()`, `pickedDays` vẫn rỗng; sau khi bấm "Thêm ngày" giữ nguyên ngày vừa thêm trong ô (không xoá), nhờ đó vừa thấy ngày dạng pick date vừa gõ tiếp được từ bàn phím. Cập nhật README. `npm run lint` + `npm run build` đạt; không đổi rules.
 
+### 2.29 To hơn âm báo đơn mới
+
+- `notificationSound.ts`: đổi từ 2 nốt sine (đỉnh gain 0,12, ngân 0,18s) thành **3 nốt tăng dần** 880 → 1174,66 → 1567,98 Hz, sóng `triangle`, đỉnh gain 0,32 qua master gain 0,85, mỗi nốt ngân 0,26s, cách nhau 0,17s — to và dễ nghe hơn khi đang làm việc app khác, vẫn không vượt ngưỡng clip.
+- Cập nhật README mục thông báo; `npm run lint` + `npm run build` đạt; không đổi rules.
+
 ### 2.20 Giấy xác nhận y tế gọn còn một tick
 
 - Form nhân viên (`EmployeeLeaveRequestForm.tsx`) bỏ hoàn toàn ô **liên kết Google Drive** và kiểm tra `validateGoogleDriveUrl`; chỉ giữ checkbox **"Tôi đã có giấy xác nhận của bệnh viện / cơ sở y tế"**. Submit không còn ghi `attachmentUrl`.

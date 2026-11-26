@@ -36,7 +36,7 @@ export function unlockNotificationSound(): void {
   }
 }
 
-/** Chuông hai nốt ngắn, phát khi có đơn mới (chỉ khi đã mở audio context). */
+/** Chuông ba nốt tăng dần, to hơn, phát khi có đơn mới (khi đã mở audio context). */
 export function playNewRequestSound(): void {
   if (!isNotificationSoundEnabled()) return;
   const ctx = audioContext;
@@ -44,19 +44,24 @@ export function playNewRequestSound(): void {
 
   try {
     const now = ctx.currentTime;
-    [880, 1174.66].forEach((frequency, index) => {
-      const start = now + index * 0.16;
+    // Ba nốt tăng dần, to hơn và dài hơn trước để dễ nghe khi đang làm việc khác.
+    const master = ctx.createGain();
+    master.gain.value = 0.85;
+    master.connect(ctx.destination);
+
+    [880, 1174.66, 1567.98].forEach((frequency, index) => {
+      const start = now + index * 0.17;
       const oscillator = ctx.createOscillator();
       const gain = ctx.createGain();
-      oscillator.type = 'sine';
+      oscillator.type = 'triangle';
       oscillator.frequency.setValueAtTime(frequency, start);
       gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.12, start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+      gain.gain.exponentialRampToValueAtTime(0.32, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.26);
       oscillator.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(master);
       oscillator.start(start);
-      oscillator.stop(start + 0.2);
+      oscillator.stop(start + 0.28);
     });
   } catch {
     // Không ảnh hưởng tới luồng thông báo nếu thiết bị không phát được tiếng.
