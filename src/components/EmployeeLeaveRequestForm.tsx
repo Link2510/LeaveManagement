@@ -331,10 +331,7 @@ export function EmployeeLeaveRequestForm({
             </div>
 
             <p className="text-[11px] text-slate-500">
-              Ô ngày luôn hiển thị một giá trị (mặc định là hôm nay) và gõ được trực
-              tiếp <strong>dd/mm/yyyy</strong> / <strong>yyyy-mm-dd</strong>, hoặc bấm
-              biểu tượng lịch để chọn. Bấm <strong>Thêm ngày</strong> mới đưa ngày đó
-              vào đơn.
+              Nhập ngày hoặc chọn ngày với icon bên cạnh.
             </p>
 
             {pickerError && (
@@ -347,7 +344,7 @@ export function EmployeeLeaveRequestForm({
               <div className="px-3.5 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
                 <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
                   <CalendarDays className="w-4 h-4 text-teal-700" />
-                  Các ngày nghỉ đã chọn ({pickedDays.length})
+                  Các ngày nghỉ đã chọn ({pickedDays.length}) — có thể chọn nhiều riêng lẻ
                 </div>
                 <div className="text-xs font-semibold text-slate-900 font-mono-num tabular-nums">
                   Tổng: {workingDays} ngày làm việc
