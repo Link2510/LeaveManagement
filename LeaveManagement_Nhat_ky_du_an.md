@@ -224,7 +224,7 @@
 
 - `firestore.rules`: `leaveRequests.allow delete` đổi từ `false` thành `isSuperAdmin()` — chỉ email `mynamelink1998@gmail.com` (đã xác thực) xoá được; Quản lý thường vẫn không.
 - `firestoreService.ts`: thêm `deleteLeaveRequest(requestId)` — truy vấn `notifications` theo `requestId`, rồi `writeBatch` xoá **đơn + mọi thông báo liên quan** trong cùng một batch (`handleFirestoreError(..., DELETE, ...)`), nên mục chuông/Thông báo không còn "rác" của đơn test. Rules cho phép xoá notification với `isManager()`, Super Admin thoả mãn.
-- UI: `isSuperAdmin` được truyền từ `App.tsx` xuống `LeaveApprovalQueue` (nút **"Xoá đơn (test)"** trên thẻ đơn chờ) và `ApprovalHistory` (nút **"Xoá đơn"** cho đơn đã duyệt/từ chối, đặt ngay dưới tên nhân sự ở cột đầu để không phải cuộn ngang). Mỗi nút có `window.confirm` nêu rõ "XOÁ VĨNH VIỄN ... không thể hoàn tác", trạng thái busy riêng và hiển thị lỗi inline.
+- UI: `isSuperAdmin` được truyền từ `App.tsx` xuống `LeaveApprovalQueue` (nút **"Xoá đơn"** trên thẻ đơn chờ) và `ApprovalHistory` (nút **"Xoá đơn"** cho đơn đã duyệt/từ chối, đặt ngay dưới tên nhân sự ở cột đầu để không phải cuộn ngang). Mỗi nút có `window.confirm` nêu rõ "XOÁ VĨNH VIỄN ... không thể hoàn tác", trạng thái busy riêng và hiển thị lỗi inline.
 - Cập nhật README + `security_spec.md`. Cần deploy rules (GitHub Actions tự làm, hoặc `firebase deploy --only firestore:rules`).
 
 ### 2.31 Tab đổi mật khẩu cho tài khoản Quản lý

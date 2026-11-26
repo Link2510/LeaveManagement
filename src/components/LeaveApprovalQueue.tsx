@@ -505,7 +505,7 @@ function PendingRequestCard({
                     className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-700 bg-white border border-red-200 hover:bg-red-50 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap mr-auto"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    {busy === 'delete' ? 'Đang xoá...' : 'Xoá đơn (test)'}
+                    {busy === 'delete' ? 'Đang xoá...' : 'Xoá đơn'}
                   </button>
                 )}
                 <button
