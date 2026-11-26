@@ -21,6 +21,7 @@ import {
   LogIn,
   LogOut,
   Menu,
+  MonitorUp,
   Send,
   ShieldCheck,
   Smile,
@@ -84,6 +85,12 @@ import {
   setNotificationSoundEnabled,
   unlockNotificationSound,
 } from './utils/notificationSound';
+import {
+  getDesktopPermission,
+  requestDesktopPermission,
+  showDesktopNotification,
+  type DesktopPermission,
+} from './utils/desktopNotifications';
 
 type NavTab =
   | 'attendance'
@@ -114,6 +121,9 @@ export default function App() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [notifPanelOpen, setNotifPanelOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(isNotificationSoundEnabled);
+  const [desktopPermission, setDesktopPermission] = useState<DesktopPermission>(
+    getDesktopPermission,
+  );
   const [newRequestToast, setNewRequestToast] = useState<LeaveRequestItem | null>(null);
   const [extraToastCount, setExtraToastCount] = useState(0);
   const notifPanelRef = useRef<HTMLDivElement>(null);
@@ -257,7 +267,21 @@ useEffect(() => {
         fromOthers.forEach((item) => toastedRequestIdsRef.current.add(item.id));
         setNewRequestToast(fromOthers[0]);
         setExtraToastCount(fromOthers.length - 1);
-        if (!previewAsEmployeeRef.current) playNewRequestSound();
+        if (!previewAsEmployeeRef.current) {
+          playNewRequestSound();
+          const item = fromOthers[0];
+          showDesktopNotification({
+            title: 'Đơn nghỉ phép mới chờ duyệt',
+            body: `${item.employeeName} (${item.department}) vừa gửi đơn nghỉ ${
+              item.workingDays
+            } ngày (${formatDateVN(item.startDate)}${
+              Array.isArray(item.dates) && item.dates.length > 1
+                ? ` và ${item.dates.length - 1} ngày khác`
+                : ` → ${formatDateVN(item.endDate)}`
+            }).`,
+            onClick: () => setActiveTab('approvals'),
+          });
+        }
       },
     );
     const unsubNotifs = subscribeNotifications(
@@ -631,6 +655,19 @@ useEffect(() => {
       await markAllNotificationsRead(notifications);
     } catch {
       // Bỏ qua lỗi mạng, danh sách sẽ tự đồng bộ lại.
+    }
+  };
+
+  const handleEnableDesktopNotification = async () => {
+    if (desktopPermission === 'granted' || desktopPermission === 'unsupported') return;
+    const result = await requestDesktopPermission();
+    setDesktopPermission(result);
+    if (result === 'granted') {
+      showDesktopNotification({
+        title: 'Đã bật thông báo màn hình',
+        body: 'Bạn sẽ thấy thông báo ngay cả khi đang làm việc app khác (trình duyệt vẫn mở).',
+        onClick: () => setActiveTab('approvals'),
+      });
     }
   };
 
@@ -1053,6 +1090,41 @@ useEffect(() => {
                           >
                             {soundEnabled ? 'Đang bật' : 'Đã tắt'}
                           </button>
+                        </div>
+
+                        <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-slate-600 inline-flex items-center gap-1.5">
+                            <MonitorUp className="w-3.5 h-3.5 text-teal-700" />
+                            Thông báo trên màn hình
+                          </span>
+                          <div className="flex flex-col items-end gap-0.5">
+                            <button
+                              type="button"
+                              disabled={
+                                desktopPermission === 'granted' ||
+                                desktopPermission === 'unsupported'
+                              }
+                              onClick={() => void handleEnableDesktopNotification()}
+                              className={`px-2.5 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+                                desktopPermission === 'granted'
+                                  ? 'bg-emerald-700 text-white border-emerald-700'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                              } disabled:cursor-default`}
+                            >
+                              {desktopPermission === 'granted'
+                                ? 'Đang bật'
+                                : desktopPermission === 'denied'
+                                  ? 'Đã chặn'
+                                  : desktopPermission === 'unsupported'
+                                    ? 'Không hỗ trợ'
+                                    : 'Bật thông báo'}
+                            </button>
+                            {desktopPermission === 'denied' && (
+                              <span className="text-[10px] text-red-700">
+                                Cho phép lại ở biểu tượng khoá trên thanh địa chỉ
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="max-h-80 overflow-y-auto">

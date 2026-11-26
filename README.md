@@ -32,13 +32,13 @@
 ### Dành cho Quản lý (đăng nhập)
 
 - **Duyệt đơn chờ**: hàng đợi đơn nhân viên tự gửi, sửa phân bổ (tổng phải bằng số ngày làm việc, bước 0,5 ngày), đổi buổi nghỉ nửa ngày (Sáng/Chiều), duyệt hoặc từ chối kèm lý do bắt buộc, đánh dấu đã có giấy xác nhận nghỉ ốm.
-- **Thông báo trong app**: chuông ở góc phải header với số chưa đọc, danh sách thông báo, đánh dấu đã đọc / đọc tất cả. Khi đang mở app mà có đơn mới, hiện **toast** góc dưới phải kèm nút “Xem đơn” và phát **tiếng chuông hai nốt**. Trong panel chuông có nút **Tiếng báo khi có đơn mới → Đang bật / Đã tắt** (lưu trong `localStorage` của trình duyệt). Ngoài ra có hẳn tab **Thông báo** trong menu quản lý: lọc Tất cả / Chưa đọc, tìm theo tên hoặc nội dung, xem trạng thái hiện tại của đơn liên quan.
+- **Thông báo trong app**: chuông ở góc phải header với số chưa đọc, danh sách thông báo, đánh dấu đã đọc / đọc tất cả. Khi đang mở app mà có đơn mới, hiện **toast** góc dưới phải kèm nút “Xem đơn”, phát **tiếng chuông hai nốt** và (nếu đã cấp quyền) hiện **thông báo nổi trên màn hình** kiểu Messenger — vẫn thấy khi đang làm việc app khác, click vào thông báo sẽ mở thẳng tab **Duyệt đơn chờ**. Trong panel chuông có nút **Tiếng báo khi có đơn mới → Đang bật / Đã tắt** và nút **Thông báo trên màn hình → Bật thông báo / Đang bật / Đã chặn**. Ngoài ra có hẳn tab **Thông báo** trong menu quản lý: lọc Tất cả / Chưa đọc, tìm theo tên hoặc nội dung, xem trạng thái hiện tại của đơn liên quan.
 - **Phân bổ nghỉ cho nhân viên**: quản lý tạo đơn trực tiếp (trừ quỹ phép ngay).
 - Tab **"Đăng ký nghỉ phép"** chỉ hiện ở chế độ **Nhân viên**; khi đăng nhập Quản lý thì ẩn đi (muốn xem lại dùng ô "Chế độ hiển thị" → "Nhân viên"). Quản lý dùng tab riêng **"Phân bổ nghỉ cho nhân viên"** và **"Duyệt đơn chờ"**.
 - **Bảng thống kê**, **Lịch nghỉ tháng**, **Quản lý nhân sự**, **Lịch sử nghỉ phép**, **Ngày nghỉ công ty**.
 - **Xuất Excel theo tháng**: trong **Lịch nghỉ tháng**, bấm **"Xuất Excel tháng này"** để tải file `NghiPhep_YYYY-MM.xlsx` phục vụ lưu trữ/đối chiếu. File có 4 sheet: **Chi tiết ngày nghỉ** (mỗi ngày làm việc một dòng: ngày, thứ, nhân viên, phòng ban, buổi nghỉ, số ngày, loại phép phân bổ, lý do, bàn giao, mã đơn, người duyệt, thời điểm duyệt), **Tổng hợp theo nhân viên** (số ngày từng loại phép), **Thông tin** (tháng, giờ làm việc, nguồn dữ liệu, thời điểm xuất) và **Lịch nghỉ tháng** — lưới Thứ 2–Chủ nhật giống hệt trên web: ô có nghỉ phép (xanh lá, kèm tên nhân sự + loại phép), ngày lễ (hồng), OT (xanh dương), cuối tuần (xám). Chỉ gồm đơn **đã duyệt** có ngày làm việc trong tháng đang xem.
 
-> Thông báo (kể cả tiếng chuông) chỉ hoạt động **trong app khi quản lý đang đăng nhập**. Không có email, không có push khi app đóng. Tiếng chuông được tạo bằng Web Audio API trên chính máy bạn — không tải file âm thanh, không gửi dữ liệu đi đâu; nếu trình duyệt chưa cho phát tiếng, hãy click bất kỳ đâu trong app một lần hoặc bật lại nút "Tiếng báo" trong panel chuông.
+> Thông báo (kể cả tiếng chuông và thông báo màn hình) chỉ hoạt động khi quản lý đang đăng nhập và **trình duyệt vẫn mở** (tab có thể đang ẩn, bạn có thể đang dùng app khác). Không có email, không có push khi tắt trình duyệt — muốn push thật khi app đóng cần thêm dịch vụ FCM + máy chủ, hiện chủ động không dùng. Tiếng chuông tạo bằng Web Audio API; thông báo màn hình dùng Notification API của trình duyệt — đều chạy tại máy bạn, không gửi dữ liệu đi đâu. Nếu bị chặn, mở biểu tượng khoá trên thanh địa chỉ để cho phép lại.
 
 ---
 
@@ -123,6 +123,7 @@ firebase deploy --only hosting
 - **Không** gửi email, không gọi dịch vụ bên thứ ba nào. Không có Google Analytics, không telemetry, không tracking pixel, không quảng cáo, không đọc clipboard, không chụp màn hình, không đọc file trên máy.
 - File Excel được **tạo ngay trong trình duyệt** (`src/utils/excelExport.ts`, ZIP + XML thuần, không thư viện Excel), tải xuống máy bạn; app không upload file đi đâu. Nội dung có lý do/ghi chú của đơn nên chỉ nên lưu ở máy/workspace được phép của công ty.
 - Tiếng báo (`src/utils/notificationSound.ts`) cũng được tổng hợp tại máy bằng Web Audio API; cài đặt Bật/Tắt chỉ lưu trong `localStorage` của trình duyệt (`lm_notification_sound_enabled`). Không microphone, không ghi âm, không phát lại nội dung thông báo.
+- Thông báo màn hình (`src/utils/desktopNotifications.ts`) chỉ dùng quyền `Notification` của trình duyệt, nội dung gồm tên nhân sự/phòng ban/số ngày/khoảng ngày (không email, không lý do), không đăng ký service worker, không gọi dịch vụ push bên ngoài.
 
 **Thông báo trong app** (chuông + toast) chỉ là document trong `/notifications` của Firestore, đọc realtime khi quản lý đăng nhập. Không có push notification, không đăng ký service worker, không lấy token thiết bị.
 

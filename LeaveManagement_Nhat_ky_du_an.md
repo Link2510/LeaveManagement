@@ -190,6 +190,13 @@
 - Cập nhật để nhận diện ngày rời rạc: `MonthlyCalendar`, `HolidayManager`, `AttendanceToday`, `LeaveApprovalQueue` (hiện danh sách ngày + chọn buổi cho từng ngày nửa), `ApprovalHistory`, `excelExport`. Rules chấp nhận `dates`/`halfDays` và cho phép sửa chúng lúc duyệt; blueprint cập nhật. `firebase deploy --dry-run` biên dịch rules thành công.
 - **Kiểm chứng:** `npm run lint` + `npm run build` đạt; file Excel mẫu với `dates: [02,05,09]/2026-11`, `halfDays: 05/Chiều` có đúng 3 dòng chi tiết, ZIP/XML hợp lệ; file test đã xoá.
 
+### 2.25 Thông báo nổi trên màn hình kiểu Messenger cho Admin
+
+- `src/utils/desktopNotifications.ts`: bọc Notification API của trình duyệt — `getDesktopPermission`, `requestDesktopPermission` (gọi trong user gesture), `showDesktopNotification` với `tag: 'lm-new-leave-request'`, `renotify: true`, click vào thông báo focus cửa sổ + gọi callback. Không service worker, không FCM, không endpoint mạng.
+- `App.tsx`: thêm state `desktopPermission`; trong callback `onAdded` của `subscribeLeaveRequests` (chế độ Quản lý) vừa phát tiếng chuông vừa gọi `showDesktopNotification` với nội dung tên/phòng ban/số ngày/ngày (không email, không lý do); click thông báo chuyển thẳng sang tab **Duyệt đơn chờ**.
+- UI panel chuông: dòng mới **"Thông báo trên màn hình"** với các trạng thái **Bật thông báo / Đang bật / Đã chặn / Không hỗ trợ**; khi bị chặn hướng dẫn mở lại quyền ở biểu tượng khoá thanh địa chỉ. Cấp quyền xong hiển thị một thông báo thử.
+- Giới hạn ghi rõ trong README: chỉ khi trình duyệt còn mở (tab ẩn vẫn được), không push khi tắt hẳn trình duyệt; không đổi rules.
+
 ### 2.20 Giấy xác nhận y tế gọn còn một tick
 
 - Form nhân viên (`EmployeeLeaveRequestForm.tsx`) bỏ hoàn toàn ô **liên kết Google Drive** và kiểm tra `validateGoogleDriveUrl`; chỉ giữ checkbox **"Tôi đã có giấy xác nhận của bệnh viện / cơ sở y tế"**. Submit không còn ghi `attachmentUrl`.
