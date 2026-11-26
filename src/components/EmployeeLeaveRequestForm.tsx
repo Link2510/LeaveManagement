@@ -331,7 +331,8 @@ export function EmployeeLeaveRequestForm({
             </div>
 
             <p className="text-[11px] text-slate-500">
-              Nhập ngày hoặc chọn ngày với icon bên cạnh.
+              Nhập ngày hoặc chọn ngày với icon bên cạnh. Bấm{' '}
+              <strong>Thêm ngày</strong> mới đưa ngày đó vào đơn.
             </p>
 
             {pickerError && (
