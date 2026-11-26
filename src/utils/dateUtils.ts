@@ -19,6 +19,23 @@ export function getHalfDayTimeLabel(session: HalfDaySession): string {
 }
 
 /** Ngày làm việc đầu tiên của khoảng nghỉ — là ngày bị giảm còn nửa ngày. */
+/** Chấp nhận yyyy-mm-dd hoặc dd/mm/yyyy (cả dấu '-'), trả về yyyy-mm-dd hoặc ''. */
+export function parseFlexibleDateInput(raw: string): string {
+  const value = raw.trim();
+  if (!value) return '';
+  let candidate = '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    candidate = value;
+  } else {
+    const match = value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (!match) return '';
+    candidate = `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+  }
+  const parsed = parseDateKey(candidate);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return toDateKey(parsed) === candidate ? candidate : '';
+}
+
 export interface SelectedLeaveDay {
   date: string;
   days: number;

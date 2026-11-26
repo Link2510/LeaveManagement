@@ -714,7 +714,7 @@ useEffect(() => {
 
   const pageTitleMap: Record<NavTab, string> = {
     attendance: 'Hôm nay ai đi làm',
-    'employee-request': 'Nhân viên đăng ký nghỉ phép (không cần đăng nhập)',
+    'employee-request': 'Nhân viên đăng ký nghỉ phép',
     notifications: 'Thông báo của quản lý',
     approvals: 'Duyệt đơn nghỉ phép đang chờ',
     dashboard: 'Tổng quan & Bảng thống kê nghỉ phép',
@@ -870,8 +870,7 @@ useEffect(() => {
             <div className="text-xs text-white/85 leading-relaxed">
               <div className="font-semibold text-white">Cổng Nhân viên nội bộ</div>
               <p className="text-[11px] text-white/70 mt-0.5">
-                Đăng ký nghỉ phép và xem đồng nghiệp đi làm hôm nay — không cần
-                đăng nhập.
+                Đăng ký nghỉ phép và xem đồng nghiệp đi làm hôm nay.
               </p>
             </div>
 

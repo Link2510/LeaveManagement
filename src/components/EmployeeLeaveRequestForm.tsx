@@ -15,11 +15,10 @@ import type { CompanyHoliday, Employee, HalfDaySession } from '../types/leave';
 import { submitEmployeeLeaveRequest } from '../services/firestoreService';
 import {
   formatDateVN,
-  getFirstWorkingDate,
   getHalfDayTimeLabel,
-  getTodayKey,
   getWeekdayLabelVN,
   isWorkingDay,
+  parseFlexibleDateInput,
   resolveSelectedLeaveDays,
 } from '../utils/dateUtils';
 import { VietnameseDatePicker } from './VietnameseDatePicker';
@@ -45,13 +44,10 @@ export function EmployeeLeaveRequestForm({
   employees,
   holidays,
 }: EmployeeLeaveRequestFormProps) {
-  const today = getTodayKey();
   const [employeeId, setEmployeeId] = useState('');
-  const [draftDate, setDraftDate] = useState(today);
-  const [pickedDays, setPickedDays] = useState<PickedDay[]>(() => {
-    const first = getFirstWorkingDate(today, today, holidays) || today;
-    return [{ date: first, session: 'Cả ngày' }];
-  });
+  const [dateText, setDateText] = useState('');
+  const [draftDate, setDraftDate] = useState('');
+  const [pickedDays, setPickedDays] = useState<PickedDay[]>([]);
   const [pickerError, setPickerError] = useState('');
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
@@ -98,17 +94,29 @@ export function EmployeeLeaveRequestForm({
     .map((day) => day.date)
     .filter((date) => !isWorkingDay(date, holidays));
 
+  const handleDateTextChange = (raw: string) => {
+    setDateText(raw);
+    setDraftDate(parseFlexibleDateInput(raw));
+  };
+
+  const handlePickerChange = (next: string) => {
+    setDraftDate(next);
+    setDateText(next);
+  };
+
   const addDate = () => {
     setPickerError('');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(draftDate)) {
-      setPickerError('Vui lòng chọn một ngày hợp lệ.');
+    const parsedFromText = parseFlexibleDateInput(dateText);
+    const target = draftDate || parsedFromText;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(target)) {
+      setPickerError('Nhập ngày hợp lệ theo định dạng dd/mm/yyyy hoặc yyyy-mm-dd.');
       return;
     }
-    if (!isWorkingDay(draftDate, holidays)) {
+    if (!isWorkingDay(target, holidays)) {
       setPickerError('Ngày này là cuối tuần / ngày nghỉ công ty. Vui lòng chọn ngày làm việc.');
       return;
     }
-    if (pickedDays.some((day) => day.date === draftDate)) {
+    if (pickedDays.some((day) => day.date === target)) {
       setPickerError('Ngày này đã có trong danh sách nghỉ.');
       return;
     }
@@ -117,10 +125,12 @@ export function EmployeeLeaveRequestForm({
       return;
     }
     setPickedDays((prev) =>
-      [...prev, { date: draftDate, session: 'Cả ngày' as PickedSession }].sort((a, b) =>
+      [...prev, { date: target, session: 'Cả ngày' as PickedSession }].sort((a, b) =>
         a.date.localeCompare(b.date),
       ),
     );
+    setDraftDate('');
+    setDateText('');
   };
 
   const removeDate = (date: string) => {
@@ -138,9 +148,9 @@ export function EmployeeLeaveRequestForm({
   const resetForm = () => {
     setReason('');
     setNote('');
-    setDraftDate(today);
-    const first = getFirstWorkingDate(today, today, holidays) || today;
-    setPickedDays([{ date: first, session: 'Cả ngày' }]);
+    setDraftDate('');
+    setDateText('');
+    setPickedDays([]);
     setPickerError('');
   };
 
@@ -202,7 +212,7 @@ export function EmployeeLeaveRequestForm({
       <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-900 flex items-start gap-2.5">
         <Info className="w-4 h-4 shrink-0 mt-0.5 text-sky-700" />
         <div className="space-y-1 leading-relaxed">
-          <p className="font-semibold">Nhân viên gửi đơn không cần đăng nhập</p>
+          <p className="font-semibold">Gửi đơn nghỉ phép</p>
           <p>
             Đơn sẽ được gửi tới quản lý để duyệt. Hệ thống <strong>không gửi email</strong>{' '}
             thông báo và <strong>không thu thập email</strong> của bạn. Khi đơn được
@@ -313,14 +323,37 @@ export function EmployeeLeaveRequestForm({
           </div>
 
           <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-3 items-end">
+            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 items-end">
+              <div>
+                <label
+                  htmlFor="emp-date-text"
+                  className="block text-xs font-medium text-slate-700 mb-1.5"
+                >
+                  Nhập ngày từ bàn phím
+                </label>
+                <input
+                  id="emp-date-text"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={dateText}
+                  onChange={(e) => handleDateTextChange(e.target.value)}
+                  placeholder="dd/mm/yyyy — ví dụ 26/11/2026"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Chấp nhận <strong>dd/mm/yyyy</strong> hoặc <strong>yyyy-mm-dd</strong>.
+                </p>
+              </div>
+
               <VietnameseDatePicker
                 id="emp-pick-date"
-                label="Chọn một ngày nghỉ"
+                label="Hoặc chọn từ lịch"
                 value={draftDate}
                 holidays={holidays}
-                onChange={setDraftDate}
+                onChange={handlePickerChange}
               />
+
               <button
                 type="button"
                 onClick={addDate}

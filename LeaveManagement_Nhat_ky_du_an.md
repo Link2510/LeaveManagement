@@ -203,6 +203,12 @@
 - `App.tsx`: bỏ state `contacts`, subscription `subscribeLeaveContacts`, lời gọi unsub và prop `contacts={contacts}`. `firestoreService.ts`: xoá hàm `subscribeLeaveContacts` và import type tương ứng. `types/leave.ts`: xoá interface `LeaveRequestContact` (không còn nơi dùng).
 - Giữ nguyên khối `/leaveRequestContacts` trong `firestore.rules` chỉ để tương thích dữ liệu cũ; app không ghi/đọc. Cập nhật README bảng collection + mục quyền riêng tư. Không cần deploy rules.
 
+### 2.27 Tiêu đề gọn hơn + nhập ngày từ bàn phím
+
+- Bỏ cụm "(không cần đăng nhập)" khỏi tiêu đề trang `employee-request` trong `pageTitleMap` (`App.tsx`), khỏi mô tả cổng Nhân viên ở sidebar và khỏi tiêu đề banner của form. Giữ nguyên thông báo kỹ thuật khi chưa bật Anonymous Auth trong service.
+- `EmployeeLeaveRequestForm.tsx`: không còn tự chọn ngày hôm nay — `draftDate`, `dateText`, `pickedDays` đều khởi tạo rỗng; reset form cũng xoá sạch. Thêm ô input chữ **"Nhập ngày từ bàn phím"** chấp nhận `dd/mm/yyyy` hoặc `yyyy-mm-dd`, dùng chung với `VietnameseDatePicker` ("Hoặc chọn từ lịch"); sau khi bấm "Thêm ngày" thì xoá ô nhập để sẵn sàng ngày kế tiếp.
+- `dateUtils.ts` thêm `parseFlexibleDateInput` (chuẩn hoá + kiểm tra ngày tồn tại bằng round-trip `parseDateKey`/`toDateKey`). Cập nhật README tính năng. Không đổi rules.
+
 ### 2.20 Giấy xác nhận y tế gọn còn một tick
 
 - Form nhân viên (`EmployeeLeaveRequestForm.tsx`) bỏ hoàn toàn ô **liên kết Google Drive** và kiểm tra `validateGoogleDriveUrl`; chỉ giữ checkbox **"Tôi đã có giấy xác nhận của bệnh viện / cơ sở y tế"**. Submit không còn ghi `attachmentUrl`.
