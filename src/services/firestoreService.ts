@@ -16,6 +16,7 @@ import {
 import {
   createUserWithEmailAndPassword,
   deleteUser,
+  signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
 import {
@@ -259,6 +260,55 @@ export async function removeManagerAccount(uid: string): Promise<void> {
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `managers/${uid}`);
     throw error;
+  }
+}
+
+/**
+ * Super Admin gỡ quyền và xoá luôn tài khoản Firebase Authentication.
+ * Client SDK chỉ xoá được chính user đang đăng nhập, nên dùng app Auth phụ để
+ * đăng nhập bằng username/password của tài khoản bị xoá rồi deleteUser().
+ * Quyền (Firestore) bị gỡ trước; nếu bước Auth lỗi thì vẫn báo rõ cho admin.
+ */
+export async function deleteManagerAccount(
+  uid: string,
+  username: string,
+  password: string,
+): Promise<void> {
+  const cleanUid = clampString(uid, 128);
+  const loginEmail = getManagerLoginEmail(username);
+
+  await removeManagerAccount(cleanUid);
+
+  try {
+    if (managerCreationAuth.currentUser) {
+      await signOut(managerCreationAuth);
+    }
+    const credential = await signInWithEmailAndPassword(
+      managerCreationAuth,
+      loginEmail,
+      password,
+    );
+    await deleteUser(credential.user);
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code)
+        : '';
+    if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+      throw new Error('Mật khẩu tài khoản cần xoá không đúng. Quyền đã bị gỡ; hãy thử lại hoặc gỡ quyền riêng.');
+    }
+    if (code === 'auth/user-not-found') {
+      throw new Error('Không tìm thấy tài khoản Authentication. Quyền đã bị gỡ.');
+    }
+    throw error;
+  } finally {
+    if (managerCreationAuth.currentUser) {
+      try {
+        await signOut(managerCreationAuth);
+      } catch (signOutError) {
+        console.error('Không thể đăng xuất phiên Auth phụ:', signOutError);
+      }
+    }
   }
 }
 

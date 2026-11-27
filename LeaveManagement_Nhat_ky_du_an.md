@@ -239,6 +239,12 @@
 - `excelExport.ts`: `MonthlyLeaveExportInput` đổi từ `year/monthIndex` sang `startDate/endDate`; `buildDetailRows` lọc ngày theo khoảng và lặp đơn khoảng liên tiếp bằng `parseDateKey` (không còn phụ thuộc tháng). `getRangeCalendarCells` dựng lưới Thứ 2–Chủ nhật phủ trọn khoảng (kể cả qua nhiều tháng) thay vì lưới một tháng. Sheet Thông tin đổi "Tháng đối chiếu" → "Khoảng đối chiếu"; tên file `BaoCaoNghiPhep_<from>_den_<to>.xlsx`.
 - Kiểm chứng: xuất khoảng 25/11→05/12/2026 với 2 đơn (27/11 cả ngày + 02/12 nửa chiều) cho đúng 2 dòng, ZIP/XML hợp lệ, sheet lịch 21 ô (3 tuần). `npm run lint` + `npm run build` đạt; file test đã xoá; không đổi rules.
 
+### 2.34 Super Admin gỡ quyền / xoá tài khoản Admin khỏi Firebase
+
+- `EmployeeManager.tsx`: mỗi dòng Admin có 2 nút (chỉ Super Admin): **Gỡ quyền** (có `window.confirm`, gọi `removeManagerAccount`) và **Xoá tài khoản** (mở form inline nhập mật khẩu tài khoản đó, có Huỷ / Xoá vĩnh viễn). Lỗi hiển thị chung phía trên danh sách.
+- `firestoreService.ts`: thêm `deleteManagerAccount(uid, username, password)` — gỡ quyền trước (`removeManagerAccount`), rồi dùng `managerCreationAuth` (app Auth phụ) đăng nhập bằng `<username>@accounts.leave-management.invalid` + mật khẩu và gọi `deleteUser`, cuối cùng signOut. Xử lý `wrong-password` / `user-not-found` bằng tiếng Việt, kèm lưu ý "quyền đã bị gỡ".
+- Giải thích giới hạn: Firebase Auth client không thể xoá user khác trực tiếp, nên bắt buộc biết mật khẩu tài khoản bị xoá (muốn xoá không cần mật khẩu phải dùng Admin SDK/Cloud Function — hiện không dùng). Rules `/managers` vốn đã chỉ cho Super Admin xoá và chặn tự xoá mình, không đổi rules. Cập nhật README. `npm run lint` + `npm run build` đạt.
+
 ### 2.33 Ba lựa chọn phạm vi xuất báo cáo
 
 - `MonthlyCalendar.tsx`: thêm `exportMode: 'month' | 'year' | 'custom'` với 3 nút **Tháng hiện tại / Năm hiện tại / Tùy ý**. `exportRange` tính từ `viewYear/viewMonth`: tháng → ngày 01 đến ngày cuối tháng; năm → `01-01` đến `12-31`; tuỳ ý → lấy `exportFrom/exportTo`. Với chế độ tháng/năm hiển thị sẵn khoảng dạng `dd/mm/yyyy → dd/mm/yyyy`; chỉ chế độ tuỳ ý mới hiện 2 ô `date`.

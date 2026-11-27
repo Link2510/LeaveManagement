@@ -6,6 +6,7 @@ import {
   addEmployeeWithQuota,
   createManagerAccountWithPassword,
   deleteEmployeeWithQuota,
+  deleteManagerAccount,
   removeManagerAccount,
   updateEmployeeWithQuota,
 } from '../services/firestoreService';
@@ -40,6 +41,10 @@ export function EmployeeManager({
   const [mgrConfirmPassword, setMgrConfirmPassword] = useState('');
   const [mgrSaving, setMgrSaving] = useState(false);
   const [mgrError, setMgrError] = useState('');
+  const [managerActionError, setManagerActionError] = useState('');
+  const [deleteAccountUid, setDeleteAccountUid] = useState<string | null>(null);
+  const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -199,6 +204,41 @@ export function EmployeeManager({
       }
     } finally {
       setMgrSaving(false);
+    }
+  };
+
+  const handleRemoveManager = async (mgr: ManagerAccount) => {
+    setManagerActionError('');
+    const ok = window.confirm(
+      `Gỡ quyền quản lý của "${mgr.name}"? Tài khoản đăng nhập vẫn còn, nhưng không còn quyền truy cập.`,
+    );
+    if (!ok) return;
+    try {
+      await removeManagerAccount(mgr.id);
+    } catch (err) {
+      setManagerActionError(
+        err instanceof Error ? err.message : 'Không thể gỡ quyền quản lý.',
+      );
+    }
+  };
+
+  const handleDeleteManagerAccount = async (mgr: ManagerAccount) => {
+    setManagerActionError('');
+    if (!deleteAccountPassword) {
+      setManagerActionError('Vui lòng nhập mật khẩu của tài khoản cần xoá.');
+      return;
+    }
+    setDeletingAccount(true);
+    try {
+      await deleteManagerAccount(mgr.id, mgr.username, deleteAccountPassword);
+      setDeleteAccountUid(null);
+      setDeleteAccountPassword('');
+    } catch (err) {
+      setManagerActionError(
+        err instanceof Error ? err.message : 'Không thể xoá tài khoản Firebase.',
+      );
+    } finally {
+      setDeletingAccount(false);
     }
   };
 
@@ -695,6 +735,12 @@ export function EmployeeManager({
         )}
 
 
+        {managerActionError && (
+          <div className="mx-6 mt-4 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800">
+            {managerActionError}
+          </div>
+        )}
+
         <div className="divide-y divide-slate-100 text-sm">
           <div className="px-6 py-3.5 flex items-center justify-between gap-4">
             <div>
@@ -705,25 +751,82 @@ export function EmployeeManager({
           </div>
 
           {managers.map((mgr) => (
-            <div key={mgr.id} className="px-6 py-3.5 flex items-center justify-between gap-4 hover:bg-slate-50/70">
-              <div>
-                <div className="font-medium text-slate-900">{mgr.name}</div>
-                <div className="text-xs text-slate-500 font-mono-num">{mgr.username}</div>
+            <React.Fragment key={mgr.id}>
+              <div className="px-6 py-3.5 flex items-center justify-between gap-4 hover:bg-slate-50/70">
+                <div>
+                  <div className="font-medium text-slate-900">{mgr.name}</div>
+                  <div className="text-xs text-slate-500 font-mono-num">{mgr.username}</div>
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <span className="text-xs font-medium text-slate-600">Quản lý</span>
+                  {isSuperAdmin && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void handleRemoveManager(mgr)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-amber-800 bg-white border border-amber-200 hover:bg-amber-50 rounded-md transition-colors"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        Gỡ quyền
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeleteAccountUid(mgr.id);
+                          setDeleteAccountPassword('');
+                          setManagerActionError('');
+                        }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-700 bg-white border border-red-200 hover:bg-red-50 rounded-md transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Xoá tài khoản
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-medium text-slate-600">Quản lý</span>
-                {isSuperAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => void removeManagerAccount(mgr.id)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 rounded-md transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Gỡ quyền
-                  </button>
-                )}
-              </div>
-            </div>
+
+              {isSuperAdmin && deleteAccountUid === mgr.id && (
+                <div className="px-6 py-3.5 bg-red-50/70 border-t border-red-100 space-y-2">
+                  <p className="text-[11px] text-red-800 leading-relaxed">
+                    Nhập mật khẩu của <strong>{mgr.username}</strong> để gỡ quyền và xoá
+                    vĩnh viễn tài khoản khỏi Firebase Authentication. Quyền sẽ bị gỡ trước;
+                    nếu mật khẩu sai, quyền vẫn mất và bạn cần gỡ quyền riêng nếu muốn giữ
+                    tài khoản.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      value={deleteAccountPassword}
+                      onChange={(e) => setDeleteAccountPassword(e.target.value)}
+                      placeholder="Mật khẩu tài khoản cần xoá"
+                      className="px-3 py-1.5 text-xs border border-red-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                    />
+                    <button
+                      type="button"
+                      disabled={deletingAccount}
+                      onClick={() => void handleDeleteManagerAccount(mgr)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-red-700 hover:bg-red-800 disabled:opacity-50 rounded-lg"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      {deletingAccount ? 'Đang xoá...' : 'Xoá vĩnh viễn'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteAccountUid(null);
+                        setDeleteAccountPassword('');
+                        setManagerActionError('');
+                      }}
+                      className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
+                    >
+                      Huỷ
+                    </button>
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
           ))}
         </div>
       </section>
