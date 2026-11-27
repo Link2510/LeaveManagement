@@ -42,9 +42,7 @@ export function EmployeeManager({
   const [mgrSaving, setMgrSaving] = useState(false);
   const [mgrError, setMgrError] = useState('');
   const [managerActionError, setManagerActionError] = useState('');
-  const [deleteAccountUid, setDeleteAccountUid] = useState<string | null>(null);
-  const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
-  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deletingAccountUid, setDeletingAccountUid] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -224,21 +222,19 @@ export function EmployeeManager({
 
   const handleDeleteManagerAccount = async (mgr: ManagerAccount) => {
     setManagerActionError('');
-    if (!deleteAccountPassword) {
-      setManagerActionError('Vui lòng nhập mật khẩu của tài khoản cần xoá.');
-      return;
-    }
-    setDeletingAccount(true);
+    const ok = window.confirm(
+      `Gỡ quyền và XOÁ VĨNH VIỄN tài khoản Firebase Authentication của "${mgr.name}" (${mgr.username})? Không cần nhập mật khẩu.`,
+    );
+    if (!ok) return;
+    setDeletingAccountUid(mgr.id);
     try {
-      await deleteManagerAccount(mgr.id, mgr.username, deleteAccountPassword);
-      setDeleteAccountUid(null);
-      setDeleteAccountPassword('');
+      await deleteManagerAccount(mgr.id);
     } catch (err) {
       setManagerActionError(
         err instanceof Error ? err.message : 'Không thể xoá tài khoản Firebase.',
       );
     } finally {
-      setDeletingAccount(false);
+      setDeletingAccountUid(null);
     }
   };
 
@@ -771,61 +767,18 @@ export function EmployeeManager({
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          setDeleteAccountUid(mgr.id);
-                          setDeleteAccountPassword('');
-                          setManagerActionError('');
-                        }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-700 bg-white border border-red-200 hover:bg-red-50 rounded-md transition-colors"
+                        disabled={deletingAccountUid !== null}
+                        onClick={() => void handleDeleteManagerAccount(mgr)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-700 bg-white border border-red-200 hover:bg-red-50 disabled:opacity-50 rounded-md transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        Xoá tài khoản
+                        {deletingAccountUid === mgr.id ? 'Đang xoá...' : 'Xoá tài khoản'}
                       </button>
                     </>
                   )}
                 </div>
               </div>
 
-              {isSuperAdmin && deleteAccountUid === mgr.id && (
-                <div className="px-6 py-3.5 bg-red-50/70 border-t border-red-100 space-y-2">
-                  <p className="text-[11px] text-red-800 leading-relaxed">
-                    Nhập mật khẩu của <strong>{mgr.username}</strong> để gỡ quyền và xoá
-                    vĩnh viễn tài khoản khỏi Firebase Authentication. Quyền sẽ bị gỡ trước;
-                    nếu mật khẩu sai, quyền vẫn mất và bạn cần gỡ quyền riêng nếu muốn giữ
-                    tài khoản.
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      type="password"
-                      autoComplete="off"
-                      value={deleteAccountPassword}
-                      onChange={(e) => setDeleteAccountPassword(e.target.value)}
-                      placeholder="Mật khẩu tài khoản cần xoá"
-                      className="px-3 py-1.5 text-xs border border-red-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20"
-                    />
-                    <button
-                      type="button"
-                      disabled={deletingAccount}
-                      onClick={() => void handleDeleteManagerAccount(mgr)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-red-700 hover:bg-red-800 disabled:opacity-50 rounded-lg"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      {deletingAccount ? 'Đang xoá...' : 'Xoá vĩnh viễn'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDeleteAccountUid(null);
-                        setDeleteAccountPassword('');
-                        setManagerActionError('');
-                      }}
-                      className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
-                    >
-                      Huỷ
-                    </button>
-                  </div>
-                </div>
-              )}
             </React.Fragment>
           ))}
         </div>

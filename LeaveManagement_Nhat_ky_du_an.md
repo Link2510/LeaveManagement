@@ -241,9 +241,15 @@
 
 ### 2.34 Super Admin gỡ quyền / xoá tài khoản Admin khỏi Firebase
 
-- `EmployeeManager.tsx`: mỗi dòng Admin có 2 nút (chỉ Super Admin): **Gỡ quyền** (có `window.confirm`, gọi `removeManagerAccount`) và **Xoá tài khoản** (mở form inline nhập mật khẩu tài khoản đó, có Huỷ / Xoá vĩnh viễn). Lỗi hiển thị chung phía trên danh sách.
-- `firestoreService.ts`: thêm `deleteManagerAccount(uid, username, password)` — gỡ quyền trước (`removeManagerAccount`), rồi dùng `managerCreationAuth` (app Auth phụ) đăng nhập bằng `<username>@accounts.leave-management.invalid` + mật khẩu và gọi `deleteUser`, cuối cùng signOut. Xử lý `wrong-password` / `user-not-found` bằng tiếng Việt, kèm lưu ý "quyền đã bị gỡ".
-- Giải thích giới hạn: Firebase Auth client không thể xoá user khác trực tiếp, nên bắt buộc biết mật khẩu tài khoản bị xoá (muốn xoá không cần mật khẩu phải dùng Admin SDK/Cloud Function — hiện không dùng). Rules `/managers` vốn đã chỉ cho Super Admin xoá và chặn tự xoá mình, không đổi rules. Cập nhật README. `npm run lint` + `npm run build` đạt.
+- `EmployeeManager.tsx`: mỗi dòng Admin có 2 nút (chỉ Super Admin): **Gỡ quyền** (có `window.confirm`, gọi `removeManagerAccount`, giữ Auth) và **Xoá tài khoản** (có `window.confirm`, gọi `deleteManagerAccount`, gỡ quyền + xoá hẳn Auth). Lỗi hiển thị chung phía trên danh sách; có trạng thái busy riêng. Xem thêm 2.35 về cơ chế không cần mật khẩu.
+- `firestoreService.ts`: thêm `deleteManagerAccount(uid)` — gỡ quyền + xoá token trước, rồi dùng refresh token lấy `idToken` và gọi `accounts:delete`; xem 2.35.
+- Cập nhật README/security_spec/blueprint. `npm run lint` + `npm run build` đạt.
+
+### 2.35 Xoá Auth không cần mật khẩu (dùng refresh token lúc tạo)
+
+- Theo phản hồi "nhập mật khẩu tài khoản đó thì khó": bỏ form mật khẩu. Thay vào đó, khi tạo Admin (`createManagerAccountWithPassword`) lưu `refreshToken` của user vừa tạo vào collection mới `/managerAuthTokens/{uid}` (rules: chỉ Super Admin get/list/create/delete, không update). Nếu ghi token lỗi, catch xoá cả manager doc lẫn Auth user để tránh rác.
+- `deleteManagerAccount(uid)`: đọc token → gỡ quyền (`managers`) + xoá token → đổi refresh token lấy `id_token` qua `securetoken.googleapis.com/v1/token` → gọi `identitytoolkit.googleapis.com/v1/accounts:delete` (đều dùng `FIREBASE_WEB_API_KEY` public). Chỉ gọi endpoint của Google, không dịch vụ thứ ba, không Cloud Function/Blaze. Nếu token lỗi/hết hạn vẫn giữ trạng thái đã gỡ quyền và báo rõ.
+- `firebase.ts` export `FIREBASE_WEB_API_KEY`. Rules dry-run biên dịch thành công. Cập nhật README (quyền riêng tư nêu rõ refresh token là credential dài hạn) + security_spec + firebase-blueprint. `npm run lint` + `npm run build` đạt. Cần deploy rules.
 
 ### 2.33 Ba lựa chọn phạm vi xuất báo cáo
 

@@ -30,6 +30,8 @@ export async function ensureEmployeeAnonymousSession() {
 }
 
 export const ADMIN_EMAIL = 'mynamelink1998@gmail.com';
+/** Web API key (vốn công khai) để gọi Identity Toolkit/Secure Token khi xoá tài khoản Admin. */
+export const FIREBASE_WEB_API_KEY = firebaseConfig.apiKey;
 
 export enum OperationType {
   CREATE = 'create',

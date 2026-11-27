@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   query,
@@ -16,12 +17,12 @@ import {
 import {
   createUserWithEmailAndPassword,
   deleteUser,
-  signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
 import {
   ADMIN_EMAIL,
   db,
+  FIREBASE_WEB_API_KEY,
   ensureEmployeeAnonymousSession,
   handleFirestoreError,
   managerCreationAuth,
@@ -223,8 +224,21 @@ export async function createManagerAccountWithPassword(
       name,
       addedBy,
     );
+
+    // Lưu refresh token để Super Admin xoá hẳn Auth account sau này (không cần mật khẩu).
+    if (createdUser.refreshToken) {
+      await setDoc(doc(db, 'managerAuthTokens', createdUser.uid), {
+        refreshToken: createdUser.refreshToken,
+        createdAt: serverTimestamp(),
+      });
+    }
   } catch (error) {
     if (createdUser) {
+      try {
+        await deleteDoc(doc(db, 'managers', createdUser.uid));
+      } catch {
+        // Bỏ qua nếu chưa kịp ghi quyền.
+      }
       try {
         await deleteUser(createdUser);
       } catch (cleanupError) {
@@ -263,52 +277,74 @@ export async function removeManagerAccount(uid: string): Promise<void> {
   }
 }
 
-/**
- * Super Admin gỡ quyền và xoá luôn tài khoản Firebase Authentication.
- * Client SDK chỉ xoá được chính user đang đăng nhập, nên dùng app Auth phụ để
- * đăng nhập bằng username/password của tài khoản bị xoá rồi deleteUser().
- * Quyền (Firestore) bị gỡ trước; nếu bước Auth lỗi thì vẫn báo rõ cho admin.
- */
-export async function deleteManagerAccount(
-  uid: string,
-  username: string,
-  password: string,
-): Promise<void> {
-  const cleanUid = clampString(uid, 128);
-  const loginEmail = getManagerLoginEmail(username);
+async function firebaseIdentityRequest(
+  url: string,
+  body: BodyInit,
+  contentType: string,
+): Promise<Record<string, unknown>> {
+  const response = await fetch(`${url}?key=${FIREBASE_WEB_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': contentType },
+    body,
+  });
+  const data = (await response.json()) as {
+    error?: { message?: string };
+    id_token?: string;
+  };
+  if (!response.ok) {
+    throw new Error(data.error?.message || `Firebase Auth trả về lỗi ${response.status}.`);
+  }
+  return data as Record<string, unknown>;
+}
 
+/**
+ * Super Admin gỡ quyền rồi xoá hẳn tài khoản Firebase Authentication.
+ * Web SDK không cho xoá user khác, nên dùng refresh token đã lưu lúc tạo tài khoản
+ * để lấy idToken rồi gọi Google Identity Toolkit `accounts:delete`.
+ * Không cần mật khẩu của tài khoản bị xoá, không dùng dịch vụ bên thứ ba.
+ */
+export async function deleteManagerAccount(uid: string): Promise<void> {
+  const cleanUid = clampString(uid, 128);
+  const tokenSnap = await getDoc(doc(db, 'managerAuthTokens', cleanUid));
+  const refreshToken =
+    tokenSnap.exists() && typeof tokenSnap.data().refreshToken === 'string'
+      ? String(tokenSnap.data().refreshToken)
+      : '';
+
+  // Gỡ quyền trước để admin đó mất truy cập ngay cả khi bước Auth lỗi.
   await removeManagerAccount(cleanUid);
+  try {
+    await deleteDoc(doc(db, 'managerAuthTokens', cleanUid));
+  } catch {
+    // Bỏ qua; token đã vô dụng khi quyền bị gỡ.
+  }
+
+  if (!refreshToken) {
+    throw new Error(
+      'Đã gỡ quyền nhưng không tìm thấy refresh token để xoá tài khoản Auth (tài khoản tạo trước khi tính năng này có hiệu lực). Vui lòng xoá thủ công trong Firebase Console.',
+    );
+  }
 
   try {
-    if (managerCreationAuth.currentUser) {
-      await signOut(managerCreationAuth);
-    }
-    const credential = await signInWithEmailAndPassword(
-      managerCreationAuth,
-      loginEmail,
-      password,
+    const tokenData = await firebaseIdentityRequest(
+      'https://securetoken.googleapis.com/v1/token',
+      `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`,
+      'application/x-www-form-urlencoded',
     );
-    await deleteUser(credential.user);
+    const idToken = typeof tokenData.id_token === 'string' ? tokenData.id_token : '';
+    if (!idToken) throw new Error('Không lấy được idToken từ refresh token.');
+
+    await firebaseIdentityRequest(
+      'https://identitytoolkit.googleapis.com/v1/accounts:delete',
+      JSON.stringify({ idToken }),
+      'application/json',
+    );
   } catch (error) {
-    const code =
-      typeof error === 'object' && error !== null && 'code' in error
-        ? String((error as { code?: unknown }).code)
-        : '';
-    if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
-      throw new Error('Mật khẩu tài khoản cần xoá không đúng. Quyền đã bị gỡ; hãy thử lại hoặc gỡ quyền riêng.');
-    }
-    if (code === 'auth/user-not-found') {
-      throw new Error('Không tìm thấy tài khoản Authentication. Quyền đã bị gỡ.');
-    }
-    throw error;
-  } finally {
-    if (managerCreationAuth.currentUser) {
-      try {
-        await signOut(managerCreationAuth);
-      } catch (signOutError) {
-        console.error('Không thể đăng xuất phiên Auth phụ:', signOutError);
-      }
-    }
+    throw new Error(
+      `Đã gỡ quyền nhưng chưa xoá được tài khoản Firebase Auth: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
   }
 }
 

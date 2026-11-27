@@ -367,6 +367,23 @@ service cloud.firestore {
         && managerUid != request.auth.uid;
     }
 
+    // 3b. Refresh token lúc tạo tài khoản Admin — chỉ Super Admin đọc/xoá.
+    //     Dùng để xoá hẳn user khỏi Firebase Auth sau này mà không cần mật khẩu của họ.
+    match /managerAuthTokens/{managerUid} {
+      allow get: if isValidId(managerUid) && isSuperAdmin();
+      allow list: if isSuperAdmin();
+      allow create: if isValidId(managerUid)
+        && isSuperAdmin()
+        && incoming().keys().hasAll(['refreshToken', 'createdAt'])
+        && incoming().keys().hasOnly(['refreshToken', 'createdAt'])
+        && incoming().refreshToken is string
+        && incoming().refreshToken.size() >= 20
+        && incoming().refreshToken.size() <= 2048
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(managerUid) && isSuperAdmin();
+    }
+
     // 4. Company Holidays (non-PII company calendar)
     match /companyHolidays/{holidayId} {
       allow get: if isValidId(holidayId);

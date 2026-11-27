@@ -569,6 +569,26 @@
         "isRead",
         "createdAt"
       ]
+    },
+    "ManagerAuthToken": {
+      "title": "ManagerAuthToken",
+      "description": "Refresh token captured when a manager account is created, readable only by the primary Super Admin so they can delete the Firebase Auth account later without that user’s password.",
+      "type": "object",
+      "properties": {
+        "refreshToken": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 2048
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "refreshToken",
+        "createdAt"
+      ]
     }
   },
   "firestore": {
@@ -631,6 +651,12 @@
         "$ref": "#/entities/LeaveSummary"
       },
       "description": "Public numeric leave balances used by the working-today board; manager-written, anyone can read."
+    },
+    "/managerAuthTokens/{managerUid}": {
+      "schema": {
+        "$ref": "#/entities/ManagerAuthToken"
+      },
+      "description": "Super-admin-only refresh token used to permanently delete manager Auth accounts."
     }
   }
 }
