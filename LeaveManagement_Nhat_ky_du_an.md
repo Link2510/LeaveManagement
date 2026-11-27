@@ -239,6 +239,11 @@
 - `excelExport.ts`: `MonthlyLeaveExportInput` đổi từ `year/monthIndex` sang `startDate/endDate`; `buildDetailRows` lọc ngày theo khoảng và lặp đơn khoảng liên tiếp bằng `parseDateKey` (không còn phụ thuộc tháng). `getRangeCalendarCells` dựng lưới Thứ 2–Chủ nhật phủ trọn khoảng (kể cả qua nhiều tháng) thay vì lưới một tháng. Sheet Thông tin đổi "Tháng đối chiếu" → "Khoảng đối chiếu"; tên file `BaoCaoNghiPhep_<from>_den_<to>.xlsx`.
 - Kiểm chứng: xuất khoảng 25/11→05/12/2026 với 2 đơn (27/11 cả ngày + 02/12 nửa chiều) cho đúng 2 dòng, ZIP/XML hợp lệ, sheet lịch 21 ô (3 tuần). `npm run lint` + `npm run build` đạt; file test đã xoá; không đổi rules.
 
+### 2.33 Ba lựa chọn phạm vi xuất báo cáo
+
+- `MonthlyCalendar.tsx`: thêm `exportMode: 'month' | 'year' | 'custom'` với 3 nút **Tháng hiện tại / Năm hiện tại / Tùy ý**. `exportRange` tính từ `viewYear/viewMonth`: tháng → ngày 01 đến ngày cuối tháng; năm → `01-01` đến `12-31`; tuỳ ý → lấy `exportFrom/exportTo`. Với chế độ tháng/năm hiển thị sẵn khoảng dạng `dd/mm/yyyy → dd/mm/yyyy`; chỉ chế độ tuỳ ý mới hiện 2 ô `date`.
+- Nút "Xuất Excel" dùng `exportRange` thay vì state tuỳ ý; đổi chế độ xoá thông báo cũ. `excelExport.ts` không đổi (đã nhận `startDate/endDate`). Cập nhật README. `npm run lint` + `npm run build` đạt; không đổi rules.
+
 ### 2.20 Giấy xác nhận y tế gọn còn một tick
 
 - Form nhân viên (`EmployeeLeaveRequestForm.tsx`) bỏ hoàn toàn ô **liên kết Google Drive** và kiểm tra `validateGoogleDriveUrl`; chỉ giữ checkbox **"Tôi đã có giấy xác nhận của bệnh viện / cơ sở y tế"**. Submit không còn ghi `attachmentUrl`.

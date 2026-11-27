@@ -42,6 +42,7 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [selectedDay, setSelectedDay] = useState<string>(getTodayKey());
   const [exportNotice, setExportNotice] = useState('');
+  const [exportMode, setExportMode] = useState<'month' | 'year' | 'custom'>('month');
   const initialMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const [exportFrom, setExportFrom] = useState(`${initialMonthKey}-01`);
   const [exportTo, setExportTo] = useState(
@@ -89,13 +90,27 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
 
   const selectedHoliday = holidayByDate.get(selectedDay);
 
-  const applyExportRange = (year: number, monthIndex: number) => {
+  const monthRange = (year: number, monthIndex: number) => {
     const key = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
-    setExportFrom(`${key}-01`);
-    setExportTo(
-      `${key}-${String(new Date(year, monthIndex + 1, 0).getDate()).padStart(2, '0')}`,
-    );
+    return {
+      from: `${key}-01`,
+      to: `${key}-${String(new Date(year, monthIndex + 1, 0).getDate()).padStart(2, '0')}`,
+    };
   };
+
+  const applyExportRange = (year: number, monthIndex: number) => {
+    const range = monthRange(year, monthIndex);
+    setExportFrom(range.from);
+    setExportTo(range.to);
+  };
+
+  const exportRange = useMemo(() => {
+    if (exportMode === 'month') return monthRange(viewYear, viewMonth);
+    if (exportMode === 'year') {
+      return { from: `${viewYear}-01-01`, to: `${viewYear}-12-31` };
+    }
+    return { from: exportFrom, to: exportTo };
+  }, [exportMode, viewYear, viewMonth, exportFrom, exportTo]);
 
   const prevMonth = () => {
     setExportNotice('');
@@ -168,25 +183,62 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] text-slate-500">Từ ngày</span>
-              <input
-                type="date"
-                value={exportFrom}
-                onChange={(e) => setExportFrom(e.target.value)}
-                className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
-              />
-              <span className="text-[11px] text-slate-500">đến ngày</span>
-              <input
-                type="date"
-                value={exportTo}
-                min={exportFrom}
-                onChange={(e) => setExportTo(e.target.value)}
-                className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
-              />
+              <div className="inline-flex items-center p-0.5 bg-slate-100 rounded-lg">
+                {(
+                  [
+                    { value: 'month', label: 'Tháng hiện tại' },
+                    { value: 'year', label: 'Năm hiện tại' },
+                    { value: 'custom', label: 'Tùy ý' },
+                  ] as const
+                ).map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      setExportMode(option.value);
+                      setExportNotice('');
+                    }}
+                    className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap ${
+                      exportMode === option.value
+                        ? 'bg-white text-teal-800 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              {exportMode === 'custom' ? (
+                <>
+                  <input
+                    type="date"
+                    value={exportFrom}
+                    onChange={(e) => setExportFrom(e.target.value)}
+                    className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+                  />
+                  <span className="text-[11px] text-slate-500">→</span>
+                  <input
+                    type="date"
+                    value={exportTo}
+                    min={exportFrom}
+                    onChange={(e) => setExportTo(e.target.value)}
+                    className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+                  />
+                </>
+              ) : (
+                <span className="text-[11px] text-slate-500 font-mono-num whitespace-nowrap">
+                  {formatDateVN(exportRange.from)} → {formatDateVN(exportRange.to)}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => {
-                  if (!exportFrom || !exportTo || exportFrom > exportTo) {
+                  if (
+                    !exportRange.from ||
+                    !exportRange.to ||
+                    exportRange.from > exportRange.to
+                  ) {
                     setExportNotice('Khoảng xuất không hợp lệ. Vui lòng chọn lại.');
                     return;
                   }
@@ -194,13 +246,13 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
                     const count = exportMonthlyLeaveExcel({
                       requests,
                       holidays,
-                      startDate: exportFrom,
-                      endDate: exportTo,
+                      startDate: exportRange.from,
+                      endDate: exportRange.to,
                     });
                     setExportNotice(
                       count > 0
-                        ? `Đã xuất ${count} ngày nghỉ từ ${formatDateVN(exportFrom)} đến ${formatDateVN(exportTo)}.`
-                        : `Không có ngày nghỉ đã duyệt từ ${formatDateVN(exportFrom)} đến ${formatDateVN(exportTo)}.`,
+                        ? `Đã xuất ${count} ngày nghỉ từ ${formatDateVN(exportRange.from)} đến ${formatDateVN(exportRange.to)}.`
+                        : `Không có ngày nghỉ đã duyệt từ ${formatDateVN(exportRange.from)} đến ${formatDateVN(exportRange.to)}.`,
                     );
                   } catch (err) {
                     setExportNotice(
