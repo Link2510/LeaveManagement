@@ -42,6 +42,11 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [selectedDay, setSelectedDay] = useState<string>(getTodayKey());
   const [exportNotice, setExportNotice] = useState('');
+  const initialMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [exportFrom, setExportFrom] = useState(`${initialMonthKey}-01`);
+  const [exportTo, setExportTo] = useState(
+    `${initialMonthKey}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`,
+  );
 
   const todayKey = getTodayKey();
   const cells = useMemo(() => getMonthCalendarCells(viewYear, viewMonth), [viewYear, viewMonth]);
@@ -84,24 +89,30 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
 
   const selectedHoliday = holidayByDate.get(selectedDay);
 
+  const applyExportRange = (year: number, monthIndex: number) => {
+    const key = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+    setExportFrom(`${key}-01`);
+    setExportTo(
+      `${key}-${String(new Date(year, monthIndex + 1, 0).getDate()).padStart(2, '0')}`,
+    );
+  };
+
   const prevMonth = () => {
     setExportNotice('');
-    if (viewMonth === 0) {
-      setViewYear((y) => y - 1);
-      setViewMonth(11);
-    } else {
-      setViewMonth((m) => m - 1);
-    }
+    const nextYear = viewMonth === 0 ? viewYear - 1 : viewYear;
+    const nextMonthIndex = viewMonth === 0 ? 11 : viewMonth - 1;
+    setViewYear(nextYear);
+    setViewMonth(nextMonthIndex);
+    applyExportRange(nextYear, nextMonthIndex);
   };
 
   const nextMonth = () => {
     setExportNotice('');
-    if (viewMonth === 11) {
-      setViewYear((y) => y + 1);
-      setViewMonth(0);
-    } else {
-      setViewMonth((m) => m + 1);
-    }
+    const nextYear = viewMonth === 11 ? viewYear + 1 : viewYear;
+    const nextMonthIndex = viewMonth === 11 ? 0 : viewMonth + 1;
+    setViewYear(nextYear);
+    setViewMonth(nextMonthIndex);
+    applyExportRange(nextYear, nextMonthIndex);
   };
 
   const goToday = () => {
@@ -110,6 +121,7 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
     setViewYear(d.getFullYear());
     setViewMonth(d.getMonth());
     setSelectedDay(getTodayKey());
+    applyExportRange(d.getFullYear(), d.getMonth());
   };
 
   const monthLabel = `Tháng ${String(viewMonth + 1).padStart(2, '0')} / ${viewYear}`;
@@ -155,30 +167,55 @@ export function MonthlyCalendar({ requests, holidays }: MonthlyCalendarProps) {
               </button>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                try {
-                  const count = exportMonthlyLeaveExcel({
-                    requests,
-                    holidays,
-                    year: viewYear,
-                    monthIndex: viewMonth,
-                  });
-                  setExportNotice(
-                    count > 0
-                      ? `Đã xuất ${count} ngày nghỉ của ${monthLabel}.`
-                      : `Tháng ${monthLabel} không có ngày nghỉ đã duyệt để xuất.`,
-                  );
-                } catch {
-                  setExportNotice('Không thể tạo file Excel. Vui lòng thử lại.');
-                }
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors whitespace-nowrap"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Xuất Excel tháng này
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] text-slate-500">Từ ngày</span>
+              <input
+                type="date"
+                value={exportFrom}
+                onChange={(e) => setExportFrom(e.target.value)}
+                className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+              />
+              <span className="text-[11px] text-slate-500">đến ngày</span>
+              <input
+                type="date"
+                value={exportTo}
+                min={exportFrom}
+                onChange={(e) => setExportTo(e.target.value)}
+                className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (!exportFrom || !exportTo || exportFrom > exportTo) {
+                    setExportNotice('Khoảng xuất không hợp lệ. Vui lòng chọn lại.');
+                    return;
+                  }
+                  try {
+                    const count = exportMonthlyLeaveExcel({
+                      requests,
+                      holidays,
+                      startDate: exportFrom,
+                      endDate: exportTo,
+                    });
+                    setExportNotice(
+                      count > 0
+                        ? `Đã xuất ${count} ngày nghỉ từ ${formatDateVN(exportFrom)} đến ${formatDateVN(exportTo)}.`
+                        : `Không có ngày nghỉ đã duyệt từ ${formatDateVN(exportFrom)} đến ${formatDateVN(exportTo)}.`,
+                    );
+                  } catch (err) {
+                    setExportNotice(
+                      err instanceof Error
+                        ? err.message
+                        : 'Không thể tạo file Excel. Vui lòng thử lại.',
+                    );
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors whitespace-nowrap"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Xuất Excel
+              </button>
+            </div>
           </div>
         </div>
 

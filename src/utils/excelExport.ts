@@ -7,10 +7,10 @@ import type {
 } from '../types/leave';
 import {
   formatDateTimeVN,
-  getMonthCalendarCells,
   getRequestHalfDayMap,
   getWeekdayLabelVN,
   isWorkingDay,
+  parseDateKey,
   resolveSelectedLeaveDays,
   toDateKey,
 } from './dateUtils';
@@ -23,8 +23,9 @@ import {
 export interface MonthlyLeaveExportInput {
   requests: LeaveRequestItem[];
   holidays: CompanyHoliday[];
-  year: number;
-  monthIndex: number; // 0-based
+  /** Khoảng xuất tuỳ ý (YYYY-MM-DD), có thể trải qua nhiều tháng. */
+  startDate: string;
+  endDate: string;
 }
 
 interface DetailRow {
@@ -87,29 +88,25 @@ function splitAllocationsByDays(
 }
 
 function buildDetailRows(input: MonthlyLeaveExportInput): DetailRow[] {
-  const { requests, holidays, year, monthIndex } = input;
-  const monthKey = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
-  const monthStart = `${monthKey}-01`;
-  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
-  const monthEnd = `${monthKey}-${String(lastDay).padStart(2, '0')}`;
+  const { requests, holidays, startDate, endDate } = input;
   const rows: DetailRow[] = [];
   for (const req of requests) {
     if (req.status !== 'Đã duyệt') continue;
     if (!req.startDate || !req.endDate) continue;
-    if (req.endDate < monthStart || req.startDate > monthEnd) continue;
+    if (req.endDate < startDate || req.startDate > endDate) continue;
 
     const sourceDates: string[] = [];
     if (Array.isArray(req.dates) && req.dates.length > 0) {
       sourceDates.push(...req.dates);
     } else {
-      const from = req.startDate > monthStart ? req.startDate : monthStart;
-      const to = req.endDate < monthEnd ? req.endDate : monthEnd;
-      let cursor = new Date(year, monthIndex, Number(from.slice(8, 10)));
+      const from = req.startDate > startDate ? req.startDate : startDate;
+      const to = req.endDate < endDate ? req.endDate : endDate;
+      const cursor = parseDateKey(from);
       let safety = 0;
-      while (toDateKey(cursor) <= to && safety < 40) {
+      while (toDateKey(cursor) <= to && safety < 400) {
         safety += 1;
         sourceDates.push(toDateKey(cursor));
-        cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
+        cursor.setDate(cursor.getDate() + 1);
       }
     }
 
@@ -117,7 +114,7 @@ function buildDetailRows(input: MonthlyLeaveExportInput): DetailRow[] {
       sourceDates,
       holidays,
       getRequestHalfDayMap(req),
-    ).filter((d) => d.date >= monthStart && d.date <= monthEnd);
+    ).filter((d) => d.date >= startDate && d.date <= endDate);
     const dayLoads = selectedDays.map((d) => d.days);
     const sessions = selectedDays.map((d) => d.session);
     const dates = selectedDays.map((d) => d.date);
@@ -162,11 +159,45 @@ interface CalendarCellData {
   mark: string;
 }
 
+/** Lưới Thứ 2–Chủ nhật phủ toàn bộ khoảng xuất (có thể qua nhiều tháng). */
+function getRangeCalendarCells(
+  startDate: string,
+  endDate: string,
+): Array<{ dateKey: string; dayNumber: number; isCurrentMonth: boolean; isWeekend: boolean }> {
+  const start = parseDateKey(startDate);
+  const end = parseDateKey(endDate);
+  const gridStart = new Date(start);
+  gridStart.setDate(gridStart.getDate() - ((gridStart.getDay() + 6) % 7));
+  const gridEnd = new Date(end);
+  gridEnd.setDate(gridEnd.getDate() + (6 - ((gridEnd.getDay() + 6) % 7)));
+
+  const cells: Array<{
+    dateKey: string;
+    dayNumber: number;
+    isCurrentMonth: boolean;
+    isWeekend: boolean;
+  }> = [];
+  const cursor = new Date(gridStart);
+  let safety = 0;
+  while (cursor <= gridEnd && safety < 400) {
+    safety += 1;
+    const dateKey = toDateKey(cursor);
+    cells.push({
+      dateKey,
+      dayNumber: cursor.getDate(),
+      isCurrentMonth: dateKey >= startDate && dateKey <= endDate,
+      isWeekend: cursor.getDay() === 0 || cursor.getDay() === 6,
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return cells;
+}
+
 function buildCalendarCells(
   rows: DetailRow[],
   holidays: CompanyHoliday[],
-  year: number,
-  monthIndex: number,
+  startDate: string,
+  endDate: string,
 ): CalendarCellData[] {
   const holidayMap = new Map<string, CompanyHoliday>();
   for (const h of holidays) holidayMap.set(h.date, h);
@@ -178,7 +209,7 @@ function buildCalendarCells(
     byDate.set(row.date, list);
   }
 
-  return getMonthCalendarCells(year, monthIndex).map((cell) => {
+  return getRangeCalendarCells(startDate, endDate).map((cell) => {
     const holiday = holidayMap.get(cell.dateKey);
     const isHoliday = Boolean(holiday && holiday.category !== 'Ngày làm việc bù');
     const isMakeupWorkday = holiday?.category === 'Ngày làm việc bù';
@@ -402,8 +433,12 @@ function xmlFile(name: string, xml: string): { name: string; data: Uint8Array } 
 /* ---------- Public API ---------- */
 
 export function exportMonthlyLeaveExcel(input: MonthlyLeaveExportInput): number {
+  const { startDate, endDate } = input;
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (!datePattern.test(startDate) || !datePattern.test(endDate) || startDate > endDate) {
+    throw new Error('Khoảng xuất không hợp lệ: ngày bắt đầu phải trước hoặc bằng ngày kết thúc.');
+  }
   const rows = buildDetailRows(input);
-  const monthKey = `${input.year}-${String(input.monthIndex + 1).padStart(2, '0')}`;
 
   const detailRows: XlsxRow[] = [
     [
@@ -474,11 +509,11 @@ export function exportMonthlyLeaveExcel(input: MonthlyLeaveExportInput): number 
 
   const infoRows: XlsxRow[] = [
     ['Mục', 'Giá trị'],
-    ['Tháng đối chiếu', monthKey],
+    ['Khoảng đối chiếu', `${startDate} → ${endDate}`],
     ['Số ngày ghi nhận', rows.length],
     ['Tổng số ngày nghỉ', Number(rows.reduce((sum, r) => sum + r.days, 0).toFixed(2))],
     ['Giờ làm việc', '08:15–12:15; nghỉ trưa 12:15–13:30; 13:30–17:30'],
-    ['Phạm vi', 'Chỉ đơn đã duyệt có ngày làm việc trong tháng được chọn'],
+    ['Phạm vi', 'Chỉ đơn đã duyệt có ngày làm việc trong khoảng đã chọn'],
     [
       'Sheet lịch',
       'Sheet "Lich nghi thang" là lưới ngày Thứ 2–Chủ nhật giống giao diện web: ô có nghỉ phép (xanh lá), lễ (hồng), OT (xanh dương), cuối tuần (xám); trong ô có tên nhân sự và loại phép.',
@@ -488,7 +523,7 @@ export function exportMonthlyLeaveExcel(input: MonthlyLeaveExportInput): number 
     ['Quyền riêng tư', 'Không chứa email; không gửi dữ liệu ra dịch vụ bên ngoài'],
   ];
 
-  const calendarCells = buildCalendarCells(rows, input.holidays, input.year, input.monthIndex);
+  const calendarCells = buildCalendarCells(rows, input.holidays, startDate, endDate);
   const calendarRows: XlsxRow[] = [
     ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7 (Nghỉ)', 'Chủ nhật (Nghỉ)'],
   ];
@@ -496,7 +531,7 @@ export function exportMonthlyLeaveExcel(input: MonthlyLeaveExportInput): number 
     calendarRows.push(
       calendarCells.slice(i, i + 7).map((cell) => {
         if (!cell.isCurrentMonth) return '';
-        const parts = [`${cell.dayNumber}/${String(input.monthIndex + 1).padStart(2, '0')}`];
+        const parts = [`${cell.dayNumber}/${cell.date.slice(5, 7)}`];
         if (cell.mark) parts.push(cell.mark);
         if (cell.holidayTitle) parts.push(cell.holidayTitle);
         if (cell.leaveText) parts.push(cell.leaveText);
@@ -537,7 +572,7 @@ export function exportMonthlyLeaveExcel(input: MonthlyLeaveExportInput): number 
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `NghiPhep_${monthKey}.xlsx`;
+  link.download = `BaoCaoNghiPhep_${startDate}_den_${endDate}.xlsx`;
   document.body.appendChild(link);
   link.click();
   link.remove();

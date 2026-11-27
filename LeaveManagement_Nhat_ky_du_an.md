@@ -233,6 +233,12 @@
 - Component mới `src/components/AccountSettings.tsx`: hiện tên đăng nhập + phương thức đăng nhập; form nhập **mật khẩu hiện tại / mới (≥ 8 ký tự) / xác nhận**, kiểm tra khớp và khác mật khẩu cũ. Gọi `reauthenticateWithCredential(user, EmailAuthProvider.credential(email, currentPassword))` rồi `updatePassword(user, newPassword)`. Xử lý các lỗi `wrong-password`, `weak-password`, `requires-recent-login` bằng tiếng Việt; clear form + thông báo thành công.
 - Tài khoản đăng nhập Google (`providerData` không có `password`) bị disable nút và hiển thị hướng dẫn quản lý tại Google. Không lưu mật khẩu vào Firestore; không đổi rules.
 
+### 2.32 Xuất báo cáo theo khoảng ngày tuỳ ý
+
+- `MonthlyCalendar.tsx`: thay nút cố định "Xuất Excel tháng này" bằng cặp input `type="date"` **Từ ngày / đến ngày** + nút **"Xuất Excel"**. Mặc định = tháng đang xem; bấm mũi tên tháng hoặc "Hôm nay" tự cập nhật khoảng. Kiểm tra `from <= to`, thông báo số dòng đã xuất ngay dưới tiêu đề.
+- `excelExport.ts`: `MonthlyLeaveExportInput` đổi từ `year/monthIndex` sang `startDate/endDate`; `buildDetailRows` lọc ngày theo khoảng và lặp đơn khoảng liên tiếp bằng `parseDateKey` (không còn phụ thuộc tháng). `getRangeCalendarCells` dựng lưới Thứ 2–Chủ nhật phủ trọn khoảng (kể cả qua nhiều tháng) thay vì lưới một tháng. Sheet Thông tin đổi "Tháng đối chiếu" → "Khoảng đối chiếu"; tên file `BaoCaoNghiPhep_<from>_den_<to>.xlsx`.
+- Kiểm chứng: xuất khoảng 25/11→05/12/2026 với 2 đơn (27/11 cả ngày + 02/12 nửa chiều) cho đúng 2 dòng, ZIP/XML hợp lệ, sheet lịch 21 ô (3 tuần). `npm run lint` + `npm run build` đạt; file test đã xoá; không đổi rules.
+
 ### 2.20 Giấy xác nhận y tế gọn còn một tick
 
 - Form nhân viên (`EmployeeLeaveRequestForm.tsx`) bỏ hoàn toàn ô **liên kết Google Drive** và kiểm tra `validateGoogleDriveUrl`; chỉ giữ checkbox **"Tôi đã có giấy xác nhận của bệnh viện / cơ sở y tế"**. Submit không còn ghi `attachmentUrl`.
